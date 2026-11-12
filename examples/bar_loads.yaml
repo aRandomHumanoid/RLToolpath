@@ -1,0 +1,6 @@
+# Pure tension: the doc's sanity test (beads should end up along x).
+supports:
+  - region: {side: xmin, width: 0.5}
+loads:
+  - region: {side: xmax, width: 0.5}
+    force: [200, 0]

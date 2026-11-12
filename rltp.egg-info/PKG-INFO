@@ -1,0 +1,18 @@
+Metadata-Version: 2.4
+Name: rltp
+Version: 0.1.0
+Summary: RL toolpath optimizer: dense per-layer covers improved by a learned edit policy
+Requires-Python: >=3.11
+Requires-Dist: numpy>=1.26
+Requires-Dist: scipy>=1.11
+Requires-Dist: trimesh>=4.0
+Requires-Dist: shapely>=2.0
+Requires-Dist: torch>=2.1
+Requires-Dist: gymnasium>=0.29
+Requires-Dist: pyyaml>=6
+Requires-Dist: matplotlib>=3.8
+Requires-Dist: networkx
+Requires-Dist: lxml
+Provides-Extra: test
+Requires-Dist: pytest>=7; extra == "test"
+Requires-Dist: hypothesis>=6; extra == "test"

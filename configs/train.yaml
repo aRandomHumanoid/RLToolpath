@@ -1,0 +1,71 @@
+# rltp train --config configs/train.yaml --out runs/exp01/
+#
+# Curriculum from the design doc. Step counts are sized for a multi-hour CPU run;
+# scale total_steps / states up on a GPU box.
+seed: 0
+threads: 8                     # torch intra-op threads in the trainer process
+holdout_families: [ribs]       # whole shape families held out for evaluation
+net:
+  chs: [32, 64, 128, 256]
+
+env:
+  p: 0.4
+  episode_len: 64
+  min_cells: 40
+  # mesh_dir: data/thingi10k   # optional: layer slices from Thingi10K STLs
+  # mesh_frac: 0.25
+
+ppo:                           # shared PPO settings (standard CleanRL-ish)
+  num_envs: 32
+  num_steps: 64
+  lr: 2.5e-4
+  gamma: 0.97
+  gae_lambda: 0.95
+  epochs: 4
+  minibatch_size: 128
+  clip: 0.2
+  ent_coef: 0.01
+  vf_coef: 0.5
+  target_kl: 0.05
+  save_every: 10
+  image_every: 10
+
+stages:
+  - name: s1_strength
+    grid: 32
+    terms: [strength]
+    ops: [flip_right, flip_down, patch5_0, patch5_90, patch9_0, patch9_90]
+    imitation:
+      states: 4000
+      candidates: 32
+      sa_steps: 128
+      epochs: 10
+      workers: 8
+    ppo:
+      total_steps: 300000
+
+  - name: s2_time_cont
+    grid: 64
+    terms: [strength, time, cont]
+    ops: all
+    imitation:
+      states: 2000
+      candidates: 32
+      sa_steps: 192
+      epochs: 6
+      workers: 8
+      batch: 32
+    ppo:
+      total_steps: 300000
+      num_steps: 32            # keeps the 64x64 rollout buffer near 200 MB
+      minibatch_size: 64
+
+  - name: s3_interlayer
+    grid: 64
+    terms: [strength, time, cont, inter]
+    neighbors: true
+    ops: all
+    ppo:
+      total_steps: 200000
+      num_steps: 32
+      minibatch_size: 64

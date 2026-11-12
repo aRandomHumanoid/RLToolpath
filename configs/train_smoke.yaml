@@ -1,0 +1,23 @@
+# Tiny curriculum to check the pipeline end to end in a couple of minutes.
+seed: 0
+threads: 4
+holdout_families: [ribs]
+env: {p: 0.4, episode_len: 16}
+ppo: {num_envs: 4, num_steps: 16, minibatch_size: 32, epochs: 2, save_every: 1, image_every: 2}
+stages:
+  - name: s1_strength
+    grid: 32
+    terms: [strength]
+    ops: [flip_right, flip_down, patch5_0, patch5_90, patch9_0, patch9_90]
+    imitation: {states: 96, candidates: 16, sa_steps: 32, epochs: 3, workers: 4}
+    ppo: {total_steps: 256}
+  - name: s2_time_cont
+    grid: 64
+    terms: [strength, time, cont]
+    imitation: {states: 32, candidates: 16, sa_steps: 32, epochs: 1, workers: 4, batch: 16}
+    ppo: {total_steps: 128}
+  - name: s3_interlayer
+    grid: 32
+    terms: [strength, time, cont, inter]
+    neighbors: true
+    ppo: {total_steps: 128}

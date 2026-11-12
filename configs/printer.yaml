@@ -1,0 +1,65 @@
+# Printer profile. Lengths mm, speeds mm/s, accel mm/s^2, temps C.
+name: generic-0.4
+nozzle_diameter: 0.4
+bead_width: 0.4            # cell pitch p (one bead wide)
+filament_diameter: 1.75
+layer_height: 0.2
+first_layer_height: 0.2
+print_speed: 40
+first_layer_speed: 20
+travel_speed: 150
+accel: 1500
+travel_accel: 3000
+junction_deviation: 0.013  # Marlin JD; from Klipper: square_corner_velocity^2 * (sqrt(2) - 1) / accel
+retract_length: 0.8
+retract_speed: 35
+z_hop: 0.0
+z_speed: 10
+layer_change_time: 0.5
+bed_center: [110, 110]
+nozzle_temp: 210
+bed_temp: 60
+fan_speed: 255
+start_gcode: |
+  G28 ; home all
+  M140 S{bed_temp}
+  M104 S{nozzle_temp}
+  M190 S{bed_temp}
+  M109 S{nozzle_temp}
+  G92 E0
+  G1 Z0.3 F600
+  G1 X5 Y5 F6000
+  G1 X5 Y100 E10 F1200 ; purge line
+  G92 E0
+end_gcode: |
+  M107
+  M104 S0
+  M140 S0
+  G91
+  G1 Z10 F600
+  G90
+  G1 X0 Y200 F6000
+  M84
+
+# Lamina constants from printed coupons (placeholders: generic PLA; replace with
+# your coupon results before trusting strength numbers).
+material:
+  E1: 3300      # MPa, along the bead
+  E2: 2600      # MPa, across beads
+  G12: 1000
+  nu12: 0.33
+  Xt: 50        # MPa strengths
+  Xc: 65
+  Yt: 28
+  Yc: 55
+  S: 30
+  Zt: 22        # interlayer (v1.5)
+  Sz: 26
+
+# Interlayer bond model q = max(phi(dt) * s, q_min), phi = 1 / (1 + (dt/tau)^n).
+# Fit tau and n to Z-direction coupons.
+bond:
+  tau: 30.0
+  n: 2.0
+  s_end: 0.7
+  q_min: 0.05

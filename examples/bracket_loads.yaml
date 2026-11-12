@@ -1,0 +1,11 @@
+# L-bracket: bolted at the hole on the vertical leg, pulled down at the tip of the
+# horizontal leg. 2D loads apply to every layer, split by layer height (v0).
+supports:
+  - region: {circle: [4, 25, 3.2]}     # bolt hole + washer, mm
+loads:
+  - region: {circle: [34, 4, 3.2]}
+    force: [0, -25]                     # N on the whole part
+# v1.5: 3D point loads for the interlayer statics (mesh coordinates)
+point_loads:
+  - pos: [34, 4, 2.0]
+    force: [0, -25, 4]

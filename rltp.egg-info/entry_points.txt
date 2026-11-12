@@ -1,0 +1,2 @@
+[console_scripts]
+rltp = rltp.cli:main

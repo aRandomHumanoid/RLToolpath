@@ -1,0 +1,61 @@
+{
+ "command": "baseline",
+ "mesh": "examples/bracket.stl",
+ "fill": "zigzag",
+ "rotate": false,
+ "weights": [
+  1.0,
+  0.3,
+  0.3,
+  0.0
+ ],
+ "terms": [
+  "strength",
+  "time",
+  "cont"
+ ],
+ "printer": "generic-0.4",
+ "baseline": {
+  "raw": {
+   "strength": 0.12896391145667277,
+   "time": -365.6986780415642,
+   "cont": -327.99611715280145,
+   "inter": 0.0
+  },
+  "fi_agg": 0.8790056870080095,
+  "inter_fi_agg": 0.0,
+  "time_s": 365.6986780415642,
+  "strokes": 120,
+  "travel_mm": 703.9689372224117,
+  "retractions": 90,
+  "boundary_ends": 240,
+  "layers": 10,
+  "cells": 29420
+ },
+ "final": {
+  "raw": {
+   "strength": 0.12896391145667277,
+   "time": -365.6986780415642,
+   "cont": -327.99611715280145,
+   "inter": 0.0
+  },
+  "fi_agg": 0.8790056870080095,
+  "inter_fi_agg": 0.0,
+  "time_s": 365.6986780415642,
+  "strokes": 120,
+  "travel_mm": 703.9689372224117,
+  "retractions": 90,
+  "boundary_ends": 240,
+  "layers": 10,
+  "cells": 29420
+ },
+ "gcode": {
+  "layers": 10,
+  "strokes": 120,
+  "moves": 1760,
+  "filament_mm": 391.4052692230115,
+  "print_mm": 11719.999999999989,
+  "travel_mm": 937.1088951875787,
+  "retractions": 101
+ }
+}

@@ -1,0 +1,826 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toolpath Viewer</title>
+<style>
+:root {
+  --bg: #f6f6f4; --fg: #1d1d1f; --muted: #66666d; --panel: #ffffff; --border: #dadadd;
+  --accent: #2f6fde; --travel: #7c7f88; --seam: #e8590c; --end: #3d3f45; --hl: rgba(225, 40, 95, 0.42);
+  --path: #2f3237; --grid: rgba(0, 0, 0, 0.055); --reject: #c92a2a;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131417; --fg: #e7e7ea; --muted: #9b9ba3; --panel: #1c1e22; --border: #32353b;
+    --accent: #6ea0ff; --travel: #858893; --seam: #ff922b; --end: #cfd0d6; --hl: rgba(255, 95, 145, 0.48);
+    --path: #d3d5db; --grid: rgba(255, 255, 255, 0.07); --reject: #ff6b6b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131417; --fg: #e7e7ea; --muted: #9b9ba3; --panel: #1c1e22; --border: #32353b;
+  --accent: #6ea0ff; --travel: #858893; --seam: #ff922b; --end: #cfd0d6; --hl: rgba(255, 95, 145, 0.48);
+  --path: #d3d5db; --grid: rgba(255, 255, 255, 0.07); --reject: #ff6b6b;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); }
+body { font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow-x: hidden; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+h1 { font-size: 16px; margin: 0; font-weight: 600; letter-spacing: 0.01em; }
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; padding: 12px 16px 24px; }
+@media (max-width: 880px) { main { grid-template-columns: minmax(0, 1fr); } }
+#canvas-wrap { position: relative; height: min(66vh, 760px); min-height: 280px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--panel); overflow: hidden; touch-action: none; }
+#view { width: 100%; height: 100%; display: block; cursor: grab; }
+#view:active { cursor: grabbing; }
+.zoom { position: absolute; right: 8px; top: 8px; display: flex; gap: 4px; }
+.zoom button { min-width: 34px; padding: 4px 8px; }
+#legend { position: absolute; left: 8px; bottom: 8px; padding: 6px 8px; border-radius: 6px; font-size: 12px;
+  background: var(--panel); border: 1px solid var(--border); max-width: calc(100% - 16px); }
+#legend .bar { height: 8px; width: 160px; max-width: 100%; border-radius: 3px; margin: 4px 0 2px; }
+#legend .ends { display: flex; justify-content: space-between; color: var(--muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 10px; }
+.controls label { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.grow { display: flex; align-items: center; gap: 8px; flex: 1 1 260px; min-width: 0; }
+.grow input[type="range"] { flex: 1 1 auto; min-width: 100px; width: 100%; }
+.mono { font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+button, select { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 10px; min-height: 32px; cursor: pointer; }
+button:hover, select:hover { border-color: var(--accent); }
+input[type="range"] { accent-color: var(--accent); }
+#chart-wrap { margin-top: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+#chart { width: 100%; height: 190px; display: block; cursor: crosshair; }
+#edit-info, .note { color: var(--muted); font-size: 13px; margin-top: 6px; overflow-wrap: anywhere; }
+aside { min-width: 0; }
+aside section { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+aside h2 { font-size: 13px; margin: 0 0 6px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+td { padding: 3px 2px; border-bottom: 1px solid var(--border); vertical-align: top; overflow-wrap: anywhere; }
+td:last-child { text-align: right; }
+td:first-child { white-space: nowrap; overflow-wrap: normal; padding-right: 12px; color: var(--muted); }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Toolpath viewer</h1>
+  <div class="tabs" role="tablist">
+    <button role="tab" data-tab="layer" aria-selected="true">Layer</button>
+    <button role="tab" data-tab="playback" aria-selected="false">Nozzle playback</button>
+    <button role="tab" data-tab="history" aria-selected="false" id="tab-history">Optimization history</button>
+  </div>
+</header>
+<main>
+  <section>
+    <div id="canvas-wrap">
+      <canvas id="view" aria-label="toolpath canvas"></canvas>
+      <div class="zoom">
+        <button id="zin" title="Zoom in">+</button>
+        <button id="zout" title="Zoom out">&minus;</button>
+        <button id="zfit" title="Fit (double-click)">Fit</button>
+      </div>
+      <div id="legend"></div>
+    </div>
+    <div class="controls">
+      <div class="grow"><label for="layer">Layer</label><input type="range" id="layer" min="0" max="0" value="0"><span class="mono" id="layer-label"></span></div>
+      <label>Colour <select id="color">
+        <option value="direction">bead direction</option>
+        <option value="order">print order</option>
+        <option value="fi">failure index</option>
+        <option value="stroke">stroke</option>
+      </select></label>
+      <label><input type="checkbox" id="travels" checked> travels</label>
+      <label><input type="checkbox" id="markers" checked> seams &amp; ends</label>
+    </div>
+    <div class="controls" id="ctl-play" hidden>
+      <button id="play">Play</button>
+      <label>Speed <select id="speed">
+        <option value="1">1&times;</option><option value="2">2&times;</option><option value="5">5&times;</option>
+        <option value="10" selected>10&times;</option><option value="25">25&times;</option><option value="100">100&times;</option>
+      </select></label>
+      <div class="grow"><input type="range" id="time" min="0" max="1000" value="0" aria-label="time"><span class="mono" id="time-label"></span></div>
+    </div>
+    <div id="ctl-hist" hidden>
+      <div class="controls">
+        <button id="hplay">Play</button>
+        <label>Rate <select id="hspeed">
+          <option value="5">5 / s</option><option value="20" selected>20 / s</option>
+          <option value="100">100 / s</option><option value="500">500 / s</option>
+        </select></label>
+        <button id="prev-acc" title="Previous accepted edit">&#9664; accepted</button>
+        <button id="next-acc" title="Next accepted edit">accepted &#9654;</button>
+        <label><input type="checkbox" id="follow" checked> follow edited layer</label>
+      </div>
+      <div class="controls">
+        <div class="grow"><label for="iter">Iteration</label><input type="range" id="iter" min="0" max="0" value="0"><span class="mono" id="iter-label"></span></div>
+      </div>
+      <div id="edit-info"></div>
+      <div id="chart-wrap"><canvas id="chart" aria-label="score chart"></canvas></div>
+      <div class="note">Chart: change since the start in normalized score units (total and each term). The exported part is the best one seen, which can differ from the last iteration when annealing accepted worse edits.</div>
+    </div>
+  </section>
+  <aside>
+    <section><h2>Layer</h2><table id="layer-table"></table></section>
+    <section><h2>Run</h2><table id="meta-table"></table></section>
+  </aside>
+</main>
+<script type="application/json" id="rltp-data">__RLTP_DATA__</script>
+<script>
+"use strict";
+/* Pure helpers (no DOM): decoding, stroke walking, ordering, history replay. */
+const RLTP = (function () {
+  const B64 = new Int16Array(128).fill(-1);
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".split("").forEach(function (ch, i) { B64[ch.charCodeAt(0)] = i; });
+
+  function b64bytes(s) {
+    let len = s.length;
+    while (len > 0 && s.charAt(len - 1) === "=") len--;
+    const out = new Uint8Array((len * 3) >> 2);
+    let o = 0, acc = 0, bits = 0;
+    for (let i = 0; i < len; i++) {
+      acc = ((acc << 6) | B64[s.charCodeAt(i)]) & 0xffffff;
+      bits += 6;
+      if (bits >= 8) { bits -= 8; out[o++] = (acc >> bits) & 255; }
+    }
+    return out;
+  }
+  /* uint16 LE per in-part cell -> Float32Array over the full grid */
+  function u16(s, vmax, cells, n) {
+    const b = b64bytes(s), out = new Float32Array(n);
+    for (let i = 0; i < cells.length; i++) out[cells[i]] = (b[2 * i] | (b[2 * i + 1] << 8)) / 65535 * vmax;
+    return out;
+  }
+  function rleCells(r) {
+    let n = 0;
+    for (let i = 1; i < r.length; i += 2) n += r[i];
+    const out = new Int32Array(n);
+    let j = 0;
+    for (let i = 0; i < r.length; i += 2) for (let q = 0; q < r[i + 1]; q++) out[j++] = r[i] + q;
+    return out;
+  }
+  /* direction codes: 0 none, 1 +1, 2 +W, 3 -1, 4 -W */
+  function applyCodes(nxt, cells, codes, W) {
+    const off = [0, 1, W, -1, -W];
+    for (let i = 0; i < cells.length; i++) {
+      const c = codes.charCodeAt(i) - 48;
+      nxt[cells[i]] = c > 0 ? cells[i] + off[c] : -1;
+    }
+  }
+  /* strokes from nxt: heads (no predecessor) first, then loops from their seam, then any other loop */
+  function walk(nxt, cells, seam, n) {
+    const prv = new Int32Array(n).fill(-1);
+    for (let i = 0; i < cells.length; i++) { const a = cells[i], b = nxt[a]; if (b >= 0) prv[b] = a; }
+    const seen = new Uint8Array(n), strokes = [];
+    function run(st, head) {
+      const c = [];
+      let x = st;
+      while (x !== -1 && !seen[x]) { seen[x] = 1; c.push(x); x = nxt[x]; }
+      strokes.push({ c: c, loop: !head && x === st });
+    }
+    for (let i = 0; i < cells.length; i++) { const a = cells[i]; if (prv[a] === -1) run(a, true); }
+    const ss = Array.from(seam).sort(function (a, b) { return a - b; });
+    for (let i = 0; i < ss.length; i++) { const a = ss[i]; if (a >= 0 && a < n && !seen[a] && prv[a] !== -1) run(a, false); }
+    for (let i = 0; i < cells.length; i++) { const a = cells[i]; if (!seen[a]) run(a, false); }
+    return { strokes: strokes, prv: prv };
+  }
+  /* greedy nearest-neighbour order from the grid origin (same rule as the time model) */
+  function nnOrder(strokes, W, p) {
+    const S = strokes.length, left = new Uint8Array(S), out = [];
+    const su = new Float64Array(S), sv = new Float64Array(S), eu = new Float64Array(S), ev = new Float64Array(S);
+    for (let i = 0; i < S; i++) {
+      const c = strokes[i].c, a = c[0], e = strokes[i].loop ? c[0] : c[c.length - 1];
+      const ra = Math.floor(a / W), re = Math.floor(e / W);
+      su[i] = (a - ra * W + 0.5) * p; sv[i] = (ra + 0.5) * p;
+      eu[i] = (e - re * W + 0.5) * p; ev[i] = (re + 0.5) * p;
+    }
+    let cu = 0, cv = 0;
+    for (let k = 0; k < S; k++) {
+      let best = -1, bd = Infinity;
+      for (let i = 0; i < S; i++) {
+        if (left[i]) continue;
+        const du = su[i] - cu, dv = sv[i] - cv, d = du * du + dv * dv;
+        if (d < bd) { bd = d; best = i; }
+      }
+      left[best] = 1; out.push(strokes[best]); cu = eu[best]; cv = ev[best];
+    }
+    return out;
+  }
+  function orderBy(strokes, order) {
+    const byFirst = new Map();
+    for (let i = 0; i < strokes.length; i++) byFirst.set(strokes[i].c[0], strokes[i]);
+    const out = [];
+    for (let i = 0; i < order.length; i++) {
+      const s = byFirst.get(order[i]);
+      if (s) { out.push(s); byFirst.delete(order[i]); }
+    }
+    byFirst.forEach(function (s) { out.push(s); });
+    return out;
+  }
+  function makeHist(H) {
+    if (!H || !H.n) return null;
+    const snapsBy = new Map(), diffsBy = new Map();
+    H.snaps.forEach(function (x) {
+      if (!snapsBy.has(x[0])) snapsBy.set(x[0], []);
+      snapsBy.get(x[0]).push({ applied: x[1], nx: x[2], seam: x[3] });
+    });
+    snapsBy.forEach(function (a) { a.sort(function (x, y) { return x.applied - y.applied; }); });
+    H.diffs.forEach(function (x) {
+      const k = H.layer[x[0]];
+      if (!diffsBy.has(k)) diffsBy.set(k, []);
+      diffsBy.get(k).push({ it: x[0], runs: x[1], nx: x[2], sadd: x[3], sdel: x[4], cells: null });
+    });
+    diffsBy.forEach(function (a) { a.sort(function (x, y) { return x.it - y.it; }); });
+    return { H: H, snapsBy: snapsBy, diffsBy: diffsBy, accAt: function (i) { return H.acc.charCodeAt(i) === 49; } };
+  }
+  function lowerBound(arr, val) {
+    let lo = 0, hi = arr.length;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (arr[m].it < val) lo = m + 1; else hi = m; }
+    return lo;
+  }
+  /* flat cells of a diff: runs index the layer's sorted in-part cell list */
+  function diffCells(G, df) {
+    if (!df.cells) {
+      const r = df.runs;
+      let n = 0;
+      for (let i = 1; i < r.length; i += 2) n += r[i];
+      const out = new Int32Array(n);
+      let j = 0;
+      for (let i = 0; i < r.length; i += 2) for (let q = 0; q < r[i + 1]; q++) out[j++] = G.cells[r[i] + q];
+      df.cells = out;
+    }
+    return df.cells;
+  }
+  function findDiff(hist, k, it) {
+    const ds = hist.diffsBy.get(k) || [];
+    const i = lowerBound(ds, it);
+    return i < ds.length && ds[i].it === it ? ds[i] : null;
+  }
+  /* cover of layer k after s proposals; reuses `prev` (same layer, earlier s) when possible */
+  function replay(hist, G, k, s, prev) {
+    const snaps = hist.snapsBy.get(k) || [];
+    let sn = null;
+    for (let i = 0; i < snaps.length && snaps[i].applied <= s; i++) sn = snaps[i];
+    if (!sn) return null;
+    let st;
+    if (prev && prev.k === k && prev.s <= s && prev.s >= sn.applied) {
+      st = prev;
+    } else {
+      const nxt = new Int32Array(G.n).fill(-1);
+      applyCodes(nxt, G.cells, sn.nx, G.W);
+      st = { k: k, s: sn.applied, nxt: nxt, seam: new Set(sn.seam) };
+    }
+    const ds = hist.diffsBy.get(k) || [];
+    for (let i = lowerBound(ds, st.s); i < ds.length && ds[i].it < s; i++) {
+      const df = ds[i];
+      applyCodes(st.nxt, diffCells(G, df), df.nx, G.W);
+      for (let j = 0; j < df.sdel.length; j++) st.seam.delete(df.sdel[j]);
+      for (let j = 0; j < df.sadd.length; j++) st.seam.add(df.sadd[j]);
+    }
+    st.s = s;
+    return st;
+  }
+  return { b64bytes: b64bytes, u16: u16, rleCells: rleCells, applyCodes: applyCodes, walk: walk,
+           nnOrder: nnOrder, orderBy: orderBy, makeHist: makeHist, replay: replay, findDiff: findDiff,
+           diffCells: diffCells };
+})();
+
+if (typeof document !== "undefined") (function () {
+  const DATA = JSON.parse(document.getElementById("rltp-data").textContent);
+  const LAY = DATA.layers, NL = LAY.length, HI = RLTP.makeHist(DATA.hist);
+  const $ = function (id) { return document.getElementById(id); };
+  const canvas = $("view"), ctx = canvas.getContext("2d");
+  const chart = $("chart"), cctx = chart.getContext("2d");
+  const S = { tab: "layer", layer: 0, color: "direction", travels: true, markers: true, t: 0, speed: 10,
+              playing: false, iter: HI ? HI.H.n : 0, follow: true, hspeed: 20, hacc: 0 };
+
+  /* ---------------- theme and colour ramps */
+  const C = {};
+  function readTheme() {
+    const cs = getComputedStyle(document.documentElement);
+    ["bg", "fg", "muted", "panel", "border", "accent", "travel", "seam", "end", "hl", "path", "grid", "reject"].forEach(function (k) {
+      C[k] = cs.getPropertyValue("--" + k).trim();
+    });
+    const th = document.documentElement.getAttribute("data-theme");
+    C.dark = th === "dark" || (th !== "light" && window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches);
+    const l = C.dark ? 63 : 44;
+    C.dir = []; for (let i = 0; i < 36; i++) C.dir.push("hsl(" + (i * 10) + ",78%," + l + "%)");
+    C.stroke = []; for (let i = 0; i < 48; i++) C.stroke.push("hsl(" + ((i * 137.508) % 360).toFixed(1) + ",62%," + l + "%)");
+  }
+  const VIRIDIS = ["#440154", "#472d7b", "#3b528b", "#2c728e", "#21918c", "#28ae80", "#5ec962", "#addc30", "#fde725"];
+  const YLORRD = ["#ffffcc", "#ffeda0", "#fed976", "#feb24c", "#fd8d3c", "#fc4e2a", "#e31a1c", "#bd0026", "#800026"];
+  function hexrgb(h) { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; }
+  function ramp(stops, nb) {
+    const rgb = stops.map(hexrgb), out = [];
+    for (let i = 0; i < nb; i++) {
+      const x = i / (nb - 1) * (rgb.length - 1), j = Math.min(Math.floor(x), rgb.length - 2), f = x - j;
+      const c = [0, 1, 2].map(function (q) { return Math.round(rgb[j][q] + (rgb[j + 1][q] - rgb[j][q]) * f); });
+      out.push("rgb(" + c[0] + "," + c[1] + "," + c[2] + ")");
+    }
+    return out;
+  }
+  const ORDER_C = ramp(VIRIDIS, 64), FI_C = ramp(YLORRD, 32);
+  const TERM_C = { strength: "#e03131", time: "#1c7ed6", cont: "#2f9e44", inter: "#ae3ec9" };
+
+  /* ---------------- layers (decoded lazily, LRU) */
+  const cache = new Map();
+  function layer(k) {
+    let G = cache.get(k);
+    if (G) { cache.delete(k); cache.set(k, G); return G; }
+    const d = LAY[k], W = d.W, n = d.H * d.W, f = d.f;
+    const ox = f[0], oy = f[1], th = f[2], p = f[3];
+    const cells = RLTP.rleCells(d.rle), cs = Math.cos(th), sn = Math.sin(th);
+    const X = new Float64Array(n), Y = new Float64Array(n);
+    for (let i = 0; i < cells.length; i++) {
+      const a = cells[i], r = Math.floor(a / W), u = (a - r * W + 0.5) * p, v = (r + 0.5) * p;
+      X[a] = ox + cs * u - sn * v; Y[a] = oy + sn * u + cs * v;
+    }
+    G = { k: k, d: d, W: W, n: n, cells: cells, X: X, Y: Y, th: th, p: p, cs: cs, sn: sn,
+          t: d.t ? RLTP.u16(d.t, d.T || 0, cells, n) : new Float32Array(n),
+          fi: d.fi ? RLTP.u16(d.fi, d.fimax, cells, n) : null, hist: null };
+    const nxt = new Int32Array(n).fill(-1);
+    RLTP.applyCodes(nxt, cells, d.nx, W);
+    G.final = coverOf(G, nxt, new Set(d.seam), d.order);
+    cache.set(k, G);
+    if (cache.size > 16) cache.delete(cache.keys().next().value);
+    return G;
+  }
+  function coverOf(G, nxt, seam, order) {
+    const w = RLTP.walk(nxt, G.cells, seam, G.n);
+    const strokes = order ? RLTP.orderBy(w.strokes, order) : RLTP.nnOrder(w.strokes, G.W, G.p);
+    return { nxt: nxt, prv: w.prv, seam: seam, strokes: strokes };
+  }
+  function histState(k, s) {
+    const G = layer(k);
+    if (G.hist && G.hist.s === s) return G.hist;
+    const st = RLTP.replay(HI, G, k, s, G.hist ? G.hist.st : null);
+    if (!st) return null;
+    G.hist = { s: s, st: st, cover: coverOf(G, st.nxt, st.seam, null) };
+    return G.hist;
+  }
+
+  /* ---------------- view transform */
+  const V = { cx: 0, cy: 0, sc: 1, w: 300, h: 300, dpr: 1, fitted: false };
+  const BB = (function () {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    LAY.forEach(function (d) {
+      const ox = d.f[0], oy = d.f[1], c = Math.cos(d.f[2]), s = Math.sin(d.f[2]), p = d.f[3];
+      [[0, 0], [d.W * p, 0], [0, d.H * p], [d.W * p, d.H * p]].forEach(function (uv) {
+        const x = ox + c * uv[0] - s * uv[1], y = oy + s * uv[0] + c * uv[1];
+        x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+      });
+    });
+    return { x0: x0, y0: y0, x1: x1, y1: y1 };
+  })();
+  function fit() {
+    const bw = Math.max(BB.x1 - BB.x0, 1e-6), bh = Math.max(BB.y1 - BB.y0, 1e-6);
+    V.sc = 0.92 * Math.min(V.w / bw, V.h / bh);
+    V.cx = (BB.x0 + BB.x1) / 2; V.cy = (BB.y0 + BB.y1) / 2;
+  }
+  function sx(x) { return (x - V.cx) * V.sc + V.w / 2; }
+  function sy(y) { return V.h / 2 - (y - V.cy) * V.sc; }
+  function zoomAt(mx, my, f) {
+    const wx = V.cx + (mx - V.w / 2) / V.sc, wy = V.cy - (my - V.h / 2) / V.sc;
+    V.sc = Math.min(Math.max(V.sc * f, 1e-3), 1e5);
+    V.cx = wx - (mx - V.w / 2) / V.sc; V.cy = wy + (my - V.h / 2) / V.sc;
+  }
+
+  /* ---------------- drawing */
+  function cellPath(G, list, path) {
+    const h = G.p / 2 * V.sc, ux = G.cs * h, uy = -G.sn * h, vx = -G.sn * h, vy = -G.cs * h;
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i], x = sx(G.X[a]), y = sy(G.Y[a]);
+      path.moveTo(x - ux - vx, y - uy - vy); path.lineTo(x + ux - vx, y + uy - vy);
+      path.lineTo(x + ux + vx, y + uy + vy); path.lineTo(x - ux + vx, y - uy + vy); path.closePath();
+    }
+  }
+  function effMode() {
+    let m = S.color;
+    if (m === "fi" && (S.tab === "history" || !layer(S.layer).fi)) m = "direction";
+    return m;
+  }
+  /* bucket key per link: 0-35 direction, 100-163 order, 200-247 stroke, 300 neutral */
+  function linkKey(G, mode, a, b, i, nS, timed) {
+    if (mode === "direction") {
+      const ang = G.th + (Math.abs(b - a) === 1 ? 0 : Math.PI / 2);
+      const deg = ((ang * 180 / Math.PI) % 180 + 180) % 180;
+      return Math.round(deg / 5) % 36;
+    }
+    if (mode === "order") {
+      const f = timed ? G.t[a] / (G.d.T || 1) : i / Math.max(nS - 1, 1);
+      return 100 + Math.max(0, Math.min(63, Math.floor(f * 64)));
+    }
+    if (mode === "stroke") return 200 + (i % 48);
+    return 300;
+  }
+  function keyColor(k) {
+    if (k < 36) return C.dir[k];
+    if (k < 200) return ORDER_C[k - 100];
+    if (k < 300) return C.stroke[k - 200];
+    return C.path;
+  }
+  function dot(path, x, y, r) { path.moveTo(x + r, y); path.arc(x, y, r, 0, Math.PI * 2); }
+
+  function drawCover(G, cov, o) {
+    const lw = Math.max(1, Math.min(G.p * V.sc * 0.62, 18));
+    const buckets = new Map(), tr = new Path2D(), seams = new Path2D(), ends = new Path2D(), singles = [];
+    const strokes = cov.strokes, nS = strokes.length, upto = o.upto, timed = !!o.ts;
+    const rs = Math.max(2.5, lw * 0.42), re = Math.max(1.6, lw * 0.26);
+    let prevEnd = -1, nozzle = null;
+    function seg(key, x0, y0, x1, y1) {
+      let p = buckets.get(key);
+      if (!p) { p = new Path2D(); buckets.set(key, p); }
+      p.moveTo(x0, y0); p.lineTo(x1, y1);
+    }
+    for (let i = 0; i < nS; i++) {
+      const s = strokes[i], c = s.c, L = c.length;
+      if (upto != null && o.ts[i] > upto) {
+        if (prevEnd >= 0 && upto > o.te[i - 1]) {
+          const f = (upto - o.te[i - 1]) / Math.max(o.ts[i] - o.te[i - 1], 1e-9);
+          const x0 = sx(G.X[prevEnd]), y0 = sy(G.Y[prevEnd]), x1 = sx(G.X[c[0]]), y1 = sy(G.Y[c[0]]);
+          const xm = x0 + (x1 - x0) * f, ym = y0 + (y1 - y0) * f;
+          tr.moveTo(x0, y0); tr.lineTo(xm, ym); nozzle = [xm, ym];
+        }
+        break;
+      }
+      if (prevEnd >= 0) { tr.moveTo(sx(G.X[prevEnd]), sy(G.Y[prevEnd])); tr.lineTo(sx(G.X[c[0]]), sy(G.Y[c[0]])); }
+      if (s.loop) dot(seams, sx(G.X[c[0]]), sy(G.Y[c[0]]), rs);
+      else { dot(ends, sx(G.X[c[0]]), sy(G.Y[c[0]]), re); if (L > 1) dot(ends, sx(G.X[c[L - 1]]), sy(G.Y[c[L - 1]]), re); }
+      if (L === 1) singles.push([c[0], linkKey(G, o.mode, c[0], c[0] + 1, i, nS, timed)]);
+      const nl = s.loop ? L : L - 1;
+      let stopped = false;
+      for (let j = 0; j < nl; j++) {
+        const a = c[j], b = j + 1 < L ? c[j + 1] : c[0];
+        const x0 = sx(G.X[a]), y0 = sy(G.Y[a]);
+        let x1 = sx(G.X[b]), y1 = sy(G.Y[b]);
+        if (upto != null) {
+          const ta = G.t[a], tb = j + 1 < L ? G.t[b] : o.te[i];
+          if (tb > upto) {
+            const f = upto > ta ? (upto - ta) / Math.max(tb - ta, 1e-9) : 0;
+            x1 = x0 + (x1 - x0) * f; y1 = y0 + (y1 - y0) * f;
+            nozzle = [x1, y1]; stopped = true;
+          }
+        }
+        seg(linkKey(G, o.mode, a, b, i, nS, timed), x0, y0, x1, y1);
+        if (stopped) break;
+      }
+      prevEnd = s.loop ? c[0] : c[L - 1];
+      if (stopped) break;
+      if (upto != null) nozzle = [sx(G.X[prevEnd]), sy(G.Y[prevEnd])];
+    }
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.lineWidth = o.mode === "fi" ? Math.max(1, lw * 0.35) : lw;
+    buckets.forEach(function (p, key) { ctx.strokeStyle = keyColor(key); ctx.stroke(p); });
+    singles.forEach(function (x) {
+      const p = new Path2D(); dot(p, sx(G.X[x[0]]), sy(G.Y[x[0]]), Math.max(1, lw * 0.5));
+      ctx.fillStyle = keyColor(x[1]); ctx.fill(p);
+    });
+    if (o.travels) {
+      ctx.save(); ctx.setLineDash([4, 4]); ctx.lineWidth = 1; ctx.strokeStyle = C.travel; ctx.globalAlpha = 0.9;
+      ctx.stroke(tr); ctx.restore();
+    }
+    if (o.markers) {
+      ctx.fillStyle = C.end; ctx.fill(ends);
+      ctx.fillStyle = C.seam; ctx.fill(seams);
+    }
+    if (nozzle) {
+      ctx.save(); ctx.lineWidth = 2; ctx.strokeStyle = C.accent; ctx.fillStyle = C.accent; ctx.globalAlpha = 0.28;
+      const p = new Path2D(); dot(p, nozzle[0], nozzle[1], Math.max(6, lw * 1.1));
+      ctx.fill(p); ctx.globalAlpha = 1; ctx.stroke(p); ctx.restore();
+    }
+    return nS;
+  }
+  function drawFi(G) {
+    const b = [];
+    for (let i = 0; i < 32; i++) b.push([]);
+    for (let i = 0; i < G.cells.length; i++) {
+      const a = G.cells[i], f = G.d.fimax > 0 ? G.fi[a] / G.d.fimax : 0;
+      b[Math.max(0, Math.min(31, Math.floor(f * 32)))].push(a);
+    }
+    for (let i = 0; i < 32; i++) {
+      if (!b[i].length) continue;
+      const p = new Path2D(); cellPath(G, b[i], p); ctx.fillStyle = FI_C[i]; ctx.fill(p);
+    }
+  }
+  function drawX(G, a) {
+    const x = sx(G.X[a]), y = sy(G.Y[a]), r = Math.max(5, G.p * V.sc * 0.6);
+    ctx.save(); ctx.strokeStyle = C.reject; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x - r, y - r); ctx.lineTo(x + r, y + r); ctx.moveTo(x + r, y - r); ctx.lineTo(x - r, y + r);
+    ctx.stroke(); ctx.restore();
+  }
+
+  function draw() {
+    const G = layer(S.layer), mode = effMode();
+    ctx.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
+    ctx.fillStyle = C.panel; ctx.fillRect(0, 0, V.w, V.h);
+    const bg = new Path2D(); cellPath(G, G.cells, bg); ctx.fillStyle = C.grid; ctx.fill(bg);
+    let cov = G.final, hl = null, rej = null;
+    const o = { mode: mode, travels: S.travels, markers: S.markers, upto: null, ts: G.d.ts, te: G.d.te };
+    if (S.tab === "history" && HI) {
+      const hs = histState(S.layer, S.iter);
+      if (hs) cov = hs.cover;
+      o.ts = null; o.te = null;
+      const e = S.iter - 1;
+      if (e >= 0 && HI.H.layer[e] === S.layer) {
+        if (HI.accAt(e)) { const df = RLTP.findDiff(HI, S.layer, e); if (df) hl = RLTP.diffCells(G, df); }
+        else rej = HI.H.cell[e];
+      }
+    } else if (S.tab === "playback") {
+      o.upto = S.t; o.markers = false;
+    }
+    if (mode === "fi") drawFi(G);
+    const nS = drawCover(G, cov, o);
+    if (hl && hl.length) { const p = new Path2D(); cellPath(G, hl, p); ctx.fillStyle = C.hl; ctx.fill(p); }
+    if (rej != null) drawX(G, rej);
+    layerTable(G, nS);
+  }
+  let pending = false;
+  function requestDraw() {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(function () { pending = false; draw(); });
+  }
+
+  /* ---------------- chart */
+  function drawChart() {
+    if (!HI || S.tab !== "history") return;
+    const dpr = window.devicePixelRatio || 1, w = chart.clientWidth, h = chart.clientHeight;
+    if (!w || !h) return;
+    chart.width = Math.round(w * dpr); chart.height = Math.round(h * dpr);
+    const c = cctx;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+    const ch = HI.H.chart, xs = ch.x, n = HI.H.n;
+    const series = [["total", ch.total]].concat(Object.keys(ch.s).map(function (k) { return [k, ch.s[k]]; }));
+    let y0 = Infinity, y1 = -Infinity;
+    series.forEach(function (sr) { sr[1].forEach(function (v) { if (v != null) { y0 = Math.min(y0, v); y1 = Math.max(y1, v); } }); });
+    if (!isFinite(y0)) { y0 = -1; y1 = 1; }
+    if (y1 - y0 < 1e-9) { y0 -= 1; y1 += 1; }
+    const pad = (y1 - y0) * 0.06; y0 -= pad; y1 += pad;
+    const L = 46, R = 10, T = 22, B = 20;
+    const X = function (x) { return L + (w - L - R) * x / Math.max(n, 1); };
+    const Y = function (y) { return T + (h - T - B) * (1 - (y - y0) / (y1 - y0)); };
+    c.font = "11px system-ui, sans-serif"; c.fillStyle = C.muted; c.strokeStyle = C.border; c.lineWidth = 1;
+    for (let i = 0; i <= 3; i++) {
+      const v = y0 + (y1 - y0) * i / 3, yy = Y(v);
+      c.beginPath(); c.moveTo(L, yy); c.lineTo(w - R, yy); c.stroke();
+      c.textAlign = "right"; c.textBaseline = "middle"; c.fillText(fmt(v), L - 4, yy);
+    }
+    if (y0 < 0 && y1 > 0) { c.save(); c.strokeStyle = C.muted; c.beginPath(); c.moveTo(L, Y(0)); c.lineTo(w - R, Y(0)); c.stroke(); c.restore(); }
+    c.textAlign = "center"; c.textBaseline = "top";
+    [0, Math.round(n / 2), n].forEach(function (v) { c.fillText(String(v), X(v), h - B + 4); });
+    c.save(); c.globalAlpha = 0.35; c.strokeStyle = C.muted; c.setLineDash([2, 3]);
+    HI.H.passes.forEach(function (ps) { c.beginPath(); c.moveTo(X(ps[0]), T); c.lineTo(X(ps[0]), h - B); c.stroke(); });
+    c.restore();
+    let lx = L;
+    series.forEach(function (sr) {
+      const name = sr[0], vals = sr[1], col = name === "total" ? C.fg : (TERM_C[name] || C.accent);
+      c.strokeStyle = col; c.lineWidth = name === "total" ? 2 : 1.25; c.beginPath();
+      let pen = false;
+      for (let i = 0; i < vals.length; i++) {
+        const v = vals[i];
+        if (v == null) { pen = false; continue; }
+        if (pen) c.lineTo(X(xs[i]), Y(v)); else { c.moveTo(X(xs[i]), Y(v)); pen = true; }
+      }
+      c.stroke();
+      c.fillStyle = col; c.textAlign = "left"; c.textBaseline = "top";
+      c.fillRect(lx, 6, 10, 3); c.fillText(name, lx + 13, 2); lx += 20 + c.measureText(name).width;
+    });
+    c.strokeStyle = C.accent; c.lineWidth = 1.5; c.beginPath(); c.moveTo(X(S.iter), T); c.lineTo(X(S.iter), h - B); c.stroke();
+  }
+
+  /* ---------------- panels */
+  function fmt(v) {
+    if (typeof v === "number") {
+      if (!isFinite(v)) return String(v);
+      const a = Math.abs(v);
+      if (Number.isInteger(v)) return String(v);
+      if (a !== 0 && (a < 1e-3 || a >= 1e6)) return v.toExponential(2);
+      return v.toFixed(a < 1 ? 4 : a < 100 ? 3 : 1);
+    }
+    if (Array.isArray(v)) return v.map(fmt).join(", ");
+    if (v === null || v === undefined) return "–";
+    return String(v);
+  }
+  function flatten(o, pre, out) {
+    Object.keys(o || {}).forEach(function (k) {
+      const v = o[k];
+      if (v && typeof v === "object" && !Array.isArray(v)) flatten(v, pre + k + ".", out);
+      else out.push([pre + k, v]);
+    });
+    return out;
+  }
+  function fillTable(el, rows) {
+    el.textContent = "";
+    rows.forEach(function (r) {
+      const tr = document.createElement("tr"), a = document.createElement("td"), b = document.createElement("td");
+      a.textContent = r[0]; b.textContent = fmt(r[1]); tr.appendChild(a); tr.appendChild(b); el.appendChild(tr);
+    });
+  }
+  function layerTable(G, nS) {
+    const d = G.d;
+    fillTable($("layer-table"), [["layer", d.k], ["z (mm)", d.z], ["height (mm)", d.h], ["cells", d.n_cells],
+      ["strokes", nS], ["layer time (s)", d.T], ["grid rotation (deg)", d.f[2] * 180 / Math.PI], ["max FI", d.fimax]]);
+  }
+  function legend() {
+    const el = $("legend"), m = effMode();
+    el.textContent = "";
+    const title = document.createElement("div"), bar = document.createElement("div"), ends = document.createElement("div");
+    bar.className = "bar"; ends.className = "ends";
+    const lo = document.createElement("span"), hi = document.createElement("span");
+    ends.appendChild(lo); ends.appendChild(hi);
+    if (m === "direction") {
+      title.textContent = "bead direction (world, mod 180°)";
+      bar.style.background = "linear-gradient(90deg," + C.dir.concat([C.dir[0]]).join(",") + ")";
+      lo.textContent = "0°"; hi.textContent = "180°";
+    } else if (m === "order") {
+      title.textContent = S.tab === "history" ? "stroke order" : "print order";
+      bar.style.background = "linear-gradient(90deg," + VIRIDIS.join(",") + ")";
+      lo.textContent = "first"; hi.textContent = "last";
+    } else if (m === "fi") {
+      title.textContent = "failure index";
+      bar.style.background = "linear-gradient(90deg," + YLORRD.join(",") + ")";
+      lo.textContent = "0"; hi.textContent = fmt(layer(S.layer).d.fimax);
+    } else {
+      title.textContent = "one colour per stroke"; el.appendChild(title); return;
+    }
+    el.appendChild(title); el.appendChild(bar); el.appendChild(ends);
+  }
+
+  /* ---------------- controls */
+  function setLayer(k) {
+    S.layer = Math.max(0, Math.min(NL - 1, k));
+    $("layer").value = S.layer;
+    const d = LAY[S.layer];
+    $("layer-label").textContent = S.layer + " / " + (NL - 1) + "  z " + fmt(d.z) + " mm";
+    S.t = Math.min(S.t, d.T || 0);
+    syncTime(); legend(); requestDraw();
+  }
+  function syncTime() {
+    const T = LAY[S.layer].T || 0;
+    $("time").value = T > 0 ? Math.round(S.t / T * 1000) : 0;
+    $("time-label").textContent = fmt(S.t) + " / " + fmt(T) + " s";
+  }
+  function setIter(s) {
+    if (!HI) return;
+    S.iter = Math.max(0, Math.min(HI.H.n, s));
+    $("iter").value = S.iter;
+    $("iter-label").textContent = S.iter + " / " + HI.H.n;
+    const e = S.iter - 1;
+    if (e >= 0) {
+      const k = HI.H.layer[e];
+      if (S.follow && k !== S.layer) setLayer(k);
+      const W = LAY[k].W, cell = HI.H.cell[e];
+      $("edit-info").textContent = "proposal " + (e + 1) + ": " + HI.H.ops[HI.H.op[e]] + " at (" +
+        Math.floor(cell / W) + ", " + (cell % W) + ") on layer " + k + " — " +
+        (HI.accAt(e) ? "accepted" : "rejected") + ", Δ score " + fmt(HI.H.d[e]);
+    } else {
+      $("edit-info").textContent = "baseline (before any edit)";
+    }
+    drawChart(); requestDraw();
+  }
+  function stepAccepted(dir) {
+    if (!HI) return;
+    const n = HI.H.n;
+    for (let e = S.iter - 1 + dir; e >= 0 && e < n; e += dir) {
+      if (HI.accAt(e) && (S.follow || HI.H.layer[e] === S.layer)) { setIter(e + 1); return; }
+    }
+    setIter(dir > 0 ? n : 0);
+  }
+  function setPlaying(v) {
+    S.playing = v;
+    $("play").textContent = v && S.tab === "playback" ? "Pause" : "Play";
+    $("hplay").textContent = v && S.tab === "history" ? "Pause" : "Play";
+    if (v) {
+      if (S.tab === "playback" && S.t >= (LAY[S.layer].T || 0)) S.t = 0;
+      if (S.tab === "history" && S.iter >= HI.H.n) setIter(0);
+      lastNow = performance.now(); S.hacc = 0;
+      requestAnimationFrame(tick);
+    }
+  }
+  let lastNow = 0;
+  function tick(now) {
+    if (!S.playing) return;
+    const dt = Math.min((now - lastNow) / 1000, 0.1);
+    lastNow = now;
+    if (S.tab === "playback") {
+      const T = LAY[S.layer].T || 0;
+      S.t = Math.min(T, S.t + dt * S.speed);
+      syncTime();
+      if (S.t >= T) setPlaying(false);
+      draw();
+    } else if (S.tab === "history" && HI) {
+      S.hacc += dt * S.hspeed;
+      const step = Math.floor(S.hacc);
+      if (step > 0) { S.hacc -= step; setIter(S.iter + step); }
+      if (S.iter >= HI.H.n) setPlaying(false);
+    } else {
+      setPlaying(false);
+    }
+    if (S.playing) requestAnimationFrame(tick);
+  }
+  function setTab(tab) {
+    if (S.playing) setPlaying(false);
+    S.tab = tab;
+    document.querySelectorAll(".tabs button").forEach(function (b) { b.setAttribute("aria-selected", String(b.dataset.tab === tab)); });
+    $("ctl-play").hidden = tab !== "playback";
+    $("ctl-hist").hidden = tab !== "history";
+    if (tab === "history") setIter(S.iter);
+    legend(); requestDraw(); drawChart();
+  }
+  function resize() {
+    const r = $("canvas-wrap").getBoundingClientRect();
+    V.dpr = window.devicePixelRatio || 1;
+    V.w = Math.max(10, r.width); V.h = Math.max(10, r.height);
+    canvas.width = Math.round(V.w * V.dpr); canvas.height = Math.round(V.h * V.dpr);
+    if (!V.fitted) { fit(); V.fitted = true; }
+    draw(); drawChart();
+  }
+
+  /* pointer: drag to pan, wheel / pinch to zoom, double-click to fit */
+  const ptrs = new Map();
+  let pinch = null;
+  function pinchState() {
+    const a = Array.from(ptrs.values());
+    return { d: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1, mx: (a[0].x + a[1].x) / 2, my: (a[0].y + a[1].y) / 2 };
+  }
+  canvas.addEventListener("pointerdown", function (e) {
+    canvas.setPointerCapture(e.pointerId);
+    ptrs.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+    if (ptrs.size === 2) pinch = pinchState();
+  });
+  canvas.addEventListener("pointermove", function (e) {
+    const p = ptrs.get(e.pointerId);
+    if (!p) return;
+    if (ptrs.size === 1) { V.cx -= (e.offsetX - p.x) / V.sc; V.cy += (e.offsetY - p.y) / V.sc; }
+    p.x = e.offsetX; p.y = e.offsetY;
+    if (ptrs.size === 2 && pinch) { const ps = pinchState(); zoomAt(ps.mx, ps.my, ps.d / pinch.d); pinch = ps; }
+    requestDraw();
+  });
+  ["pointerup", "pointercancel", "pointerleave"].forEach(function (t) {
+    canvas.addEventListener(t, function (e) { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; });
+  });
+  canvas.addEventListener("wheel", function (e) {
+    e.preventDefault(); zoomAt(e.offsetX, e.offsetY, Math.exp(-e.deltaY * 0.0015)); requestDraw();
+  }, { passive: false });
+  canvas.addEventListener("dblclick", function () { fit(); requestDraw(); });
+  $("zin").addEventListener("click", function () { zoomAt(V.w / 2, V.h / 2, 1.4); requestDraw(); });
+  $("zout").addEventListener("click", function () { zoomAt(V.w / 2, V.h / 2, 1 / 1.4); requestDraw(); });
+  $("zfit").addEventListener("click", function () { fit(); requestDraw(); });
+
+  document.querySelectorAll(".tabs button").forEach(function (b) { b.addEventListener("click", function () { setTab(b.dataset.tab); }); });
+  $("layer").max = NL - 1;
+  $("layer").addEventListener("input", function (e) { setLayer(+e.target.value); });
+  $("color").addEventListener("change", function (e) { S.color = e.target.value; legend(); requestDraw(); });
+  $("travels").addEventListener("change", function (e) { S.travels = e.target.checked; requestDraw(); });
+  $("markers").addEventListener("change", function (e) { S.markers = e.target.checked; requestDraw(); });
+  $("play").addEventListener("click", function () { setPlaying(!S.playing); });
+  $("speed").addEventListener("change", function (e) { S.speed = +e.target.value; });
+  $("time").addEventListener("input", function (e) { S.t = (+e.target.value) / 1000 * (LAY[S.layer].T || 0); syncTime(); requestDraw(); });
+  $("hplay").addEventListener("click", function () { setPlaying(!S.playing); });
+  $("hspeed").addEventListener("change", function (e) { S.hspeed = +e.target.value; });
+  $("iter").addEventListener("input", function (e) { setIter(+e.target.value); });
+  $("prev-acc").addEventListener("click", function () { stepAccepted(-1); });
+  $("next-acc").addEventListener("click", function () { stepAccepted(1); });
+  $("follow").addEventListener("change", function (e) { S.follow = e.target.checked; });
+  chart.addEventListener("click", function (e) {
+    const w = chart.clientWidth, L = 46, R = 10;
+    setIter(Math.round((e.offsetX - L) / Math.max(w - L - R, 1) * HI.H.n));
+  });
+  document.addEventListener("keydown", function (e) {
+    const tag = (e.target && e.target.tagName) || "";
+    if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      const d = e.key === "ArrowRight" ? 1 : -1;
+      if (S.tab === "history") setIter(S.iter + d); else setLayer(S.layer + d);
+      e.preventDefault();
+    } else if (e.key === " ") {
+      if (S.tab !== "layer") { setPlaying(!S.playing); e.preventDefault(); }
+    }
+  });
+  if (!LAY.some(function (d) { return d.fi; })) $("color").querySelector('option[value="fi"]').disabled = true;
+  if (!HI) $("tab-history").hidden = true;
+  else { $("iter").max = HI.H.n; }
+  fillTable($("meta-table"), flatten(DATA.meta, "", []));
+  if (window.matchMedia) {
+    const mq = matchMedia("(prefers-color-scheme: dark)");
+    const onTheme = function () { readTheme(); legend(); requestDraw(); drawChart(); };
+    if (mq.addEventListener) mq.addEventListener("change", onTheme);
+  }
+  readTheme();
+  setLayer(0);
+  if (HI) setIter(HI.H.n);
+  if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(resize).observe($("canvas-wrap"));
+    new ResizeObserver(drawChart).observe(chart);
+  } else {
+    window.addEventListener("resize", resize);
+  }
+  resize();
+})();
+</script>
+</body>
+</html>
