@@ -1,7 +1,16 @@
 """Part-level loop: pick a layer, run a short burst of proposals, keep accepted edits.
 
+Rejected edits stay banned until their layer changes (not just for the burst), so
+a deterministic proposer at a local optimum moves on to its next-best edits on
+the next visit instead of replaying the same rejected ones.
+
 Stops once acceptance has turned greedy (temperature 0) and a full pass gains
-less than eps, or when the evaluator budget runs out. Returns the best part seen.
+less than eps, when every layer has run out of untried edits, or when the
+evaluator budget runs out. Returns the best part seen.
+
+Temperatures are in units of a typical random edit's change in the weighted
+score (Normalizer.edit_std, measured during warmup), so temp0 means the same
+thing whatever the term scales are.
 """
 from __future__ import annotations
 
@@ -14,7 +23,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from rltp.config import TERMS
-from rltp.cover.ops import OPS, action_mask, apply_action, layer_diff, ops_to_indices, sample_valid
+from rltp.cover.ops import OPS, InvalidEdit, action_mask, apply_action, layer_diff, ops_to_indices, sample_valid
 from rltp.part import PartState
 
 log = logging.getLogger(__name__)
@@ -32,6 +41,12 @@ class LoopConfig:
     snapshot_every: int = 50
     ops: list | None = None
     seed: int = 0
+    persist_bans: bool = True        # False: bans last one burst (the original loop)
+    strength_boost: float = 1.0      # strength weight x this at the start, easing to x1 as annealing ends
+    stress_bias: float = 0.0         # share of proposals placed by local stress (SA, greedy, random)
+    reheat: float = 0.0              # >0: once greedy passes stall, anneal again from reheat x temp0
+    reheat_below: float = 0.005      # a greedy pass gaining less than this (weighted score) has stalled
+    reheat_after: int = 2            # stalled greedy passes in a row before a reheat
 
 
 class History:
@@ -50,8 +65,11 @@ class History:
             self.f.write(json.dumps(rec, separators=(",", ":")) + "\n")
 
     def snapshot(self, it: int, k: int, L) -> None:
+        nxt = L.nxt.astype(np.int64)
+        if L.sparse:                     # empty in-part cells of a sparse layer: -2
+            nxt[L.part.reshape(-1) & ~L.flat_mask] = -2
         self._write({"type": "snapshot", "iter": it, "layer": k,
-                     "nxt": L.nxt.tolist(), "seam": sorted(int(s) for s in L.seam)})
+                     "nxt": nxt.tolist(), "seam": sorted(int(s) for s in L.seam)})
 
     def edit(self, rec: dict, L_after=None) -> None:
         rec = {"type": "edit", **rec}
@@ -72,19 +90,25 @@ class History:
             self.f = None
 
 
-def warmup_normalizer(part: PartState, n: int, rng, ops=None) -> None:
-    """Set each term's scale from the changes of n random valid edits."""
+def warmup_normalizer(part: PartState, n: int, rng, ops=None) -> list:
+    """Set each term's scale from the changes of n random valid edits; returns those changes."""
     L_count = len(part.layers)
+    seen = []
     for i in range(n):
         k = int(rng.integers(L_count))
         M = action_mask(part.layers[k], ops).reshape(-1)
         if not M.any():
             continue
         a = int(sample_valid(M, rng)[0])
-        newL, _ = apply_action(part.layers[k], a)
+        try:
+            newL, _ = apply_action(part.layers[k], a)
+        except InvalidEdit:      # a window edit that would break a sparse layer's rules
+            continue
         c = part.propose(k, newL)
         part.norm.update(c.d)
+        seen.append(c.d)
     part.norm.frozen = True
+    return seen
 
 
 def schedule(part: PartState, recent_gain: np.ndarray) -> list[int]:
@@ -105,7 +129,9 @@ def accept(d: float, temp: float, rng) -> bool:
 
 
 def optimize_part(part: PartState, proposer, w, cfg: LoopConfig, history: History | None = None,
-                  progress=None) -> dict:
+                  progress=None, warm: tuple | None = None) -> dict:
+    """warm: (changes of the warmup edits, their evaluator calls) from a warmup already run
+    on this part (parallel chains share one), instead of running it here."""
     rng = np.random.default_rng(cfg.seed)
     w = np.asarray(w, float)
     history = history or History(None)
@@ -115,28 +141,61 @@ def optimize_part(part: PartState, proposer, w, cfg: LoopConfig, history: Histor
     for k, L in enumerate(part.layers):
         history.snapshot(0, k, L)
 
-    if not part.norm.frozen:
-        warmup_normalizer(part, cfg.warmup, rng, ops)
-    warm_evals = part.n_evals
+    warm_d: list = []
+    if warm is not None:
+        warm_d, warm_evals = list(warm[0]), int(warm[1])
+    else:
+        if not part.norm.frozen:
+            warm_d = warmup_normalizer(part, cfg.warmup, rng, ops)
+        warm_evals = part.n_evals
     part.n_evals = 0
     part.keep_best(w)
+    temp_unit = part.norm.edit_std(w)
+    if getattr(part, "fine", False) and warm_d:
+        # fine bead grids: a few edits (region turns, big refills) change the score 10-100x
+        # more than a typical one and inflate the std, letting annealing accept most bad
+        # edits; the robust spread (1.4826 x median |change|, = std for a normal) is the
+        # typical edit's size
+        tot = np.abs([part.norm.total(d, w) for d in warm_d])
+        robust = 1.4826 * float(np.median(tot))
+        if robust > 0:
+            temp_unit = robust
     history.note({"type": "start", "proposer": proposer.name, "weights": w.tolist(),
-                  "scales": part.norm.scales(), "raw": part.raw(), "total": part.total(w),
-                  "warmup_evals": warm_evals})
+                  "norm": part.norm.mode, "scales": part.norm.scales(), "temp_unit": temp_unit,
+                  "raw": part.raw(), "total": part.total(w), "warmup_evals": warm_evals})
 
     temp0 = proposer.temp0 if cfg.temp0 is None else cfg.temp0
     temp = temp0
+    if hasattr(proposer, "bias"):
+        proposer.bias = float(cfg.stress_bias)
+
+    def weights_now(pass_idx: int) -> np.ndarray:
+        """Strength-first: the strength weight starts boosted and eases back over the
+        annealing passes; acceptance uses these, the best part is judged on `w`."""
+        if cfg.strength_boost == 1.0:
+            return w
+        f = max(0.0, 1.0 - pass_idx / max(cfg.anneal_passes, 1))
+        we = w.copy()
+        we[0] = w[0] * (1.0 + (cfg.strength_boost - 1.0) * f)
+        return we
     it = 0
     recent = np.zeros(len(part.layers))
     curve = [(0, part.total(w))]
     pass_idx = 0
     stop_reason = "max_passes"
+    cycle0, cycle_temp = 0, temp0       # current annealing cycle: first pass and starting temperature
+    stalled = reheats = 0
+    # Rejected actions per layer. A ban stays valid while the layer and its interface
+    # neighbours are unchanged: other layers' edits can only rescale a banned edit's
+    # strength change through the part-wide p-norm, not flip its sign.
+    bans: list[set] = [set() for _ in part.layers]
     while pass_idx < cfg.max_passes:
         pass_gain = 0.0
         layer_gain = np.zeros(len(part.layers))
         n_acc = n_prop = 0
+        w_pass = weights_now(pass_idx)
         for k in schedule(part, recent):
-            banned: set = set()
+            banned = bans[k] if cfg.persist_bans else set()
             for _ in range(cfg.burst):
                 if part.n_evals >= cfg.max_evals:
                     break
@@ -146,14 +205,20 @@ def optimize_part(part: PartState, proposer, w, cfg: LoopConfig, history: Histor
                     M[list(banned)] = False
                 if not M.any():
                     break
-                a, cand = proposer.propose(part, k, M, w, rng)
+                a, cand = proposer.propose(part, k, M, w_pass, rng)
+                if a is None:            # every candidate was invalid
+                    break
                 if cand is None:
-                    newL, params = apply_action(L, a)
+                    try:
+                        newL, params = apply_action(L, a)
+                    except InvalidEdit:  # a window edit that would break a sparse layer's rules
+                        banned.add(a)
+                        continue
                     cand = part.propose(k, newL)
                 else:
                     params = {}
-                d = part.norm.total(cand.d, w)
-                acc = accept(d, temp, rng)
+                d = part.norm.total(cand.d, w_pass)
+                acc = accept(d, temp * temp_unit, rng)
                 op, cell = divmod(a, L.n)
                 rec = {"iter": it, "layer": k, "op": OPS[op], "cell": [cell // L.W, cell % L.W],
                        "params": params, "accepted": acc,
@@ -165,13 +230,17 @@ def optimize_part(part: PartState, proposer, w, cfg: LoopConfig, history: Histor
                     pass_gain += d
                     layer_gain[k] += max(d, 0)
                     banned.clear()
+                    if part.use_inter:          # the interfaces either side changed too
+                        for j in (k - 1, k + 1):
+                            if 0 <= j < len(bans):
+                                bans[j].clear()
                     n_acc += 1
                 else:
                     banned.add(a)
                 raw = part.raw()
                 tot = part.norm.total(raw, w)
                 rec["total"] = tot
-                rec["s"] = {t: raw[t] / part.norm.std(t) for t in TERMS}
+                rec["s"] = {t: raw[t] / part.norm.scale(t) for t in TERMS}
                 history.edit(rec, part.layers[k] if acc else None)
                 n_prop += 1
                 it += 1
@@ -196,10 +265,26 @@ def optimize_part(part: PartState, proposer, w, cfg: LoopConfig, history: Histor
         if part.n_evals >= cfg.max_evals:
             stop_reason = "max_evals"
             break
-        if temp == 0 and pass_gain < cfg.eps:
+        if n_prop == 0 and not (cfg.reheat > 0 and temp == 0):   # every layer's untried edits are used up
+            stop_reason = "exhausted"
+            break
+        if temp == 0 and cfg.reheat > 0 and temp0 > 0:
+            stalled = stalled + 1 if (pass_gain < cfg.reheat_below or n_prop == 0) else 0
+            if stalled >= cfg.reheat_after:
+                # greedy search has stalled in a local optimum: anneal again from where it
+                # is (the best part so far is kept), retrying edits rejected while greedy
+                cycle0, cycle_temp = pass_idx, temp0 * cfg.reheat
+                stalled = 0
+                reheats += 1
+                for b in bans:
+                    b.clear()
+                history.note({"type": "reheat", "pass": pass_idx, "evals": part.n_evals, "temp": cycle_temp})
+                if progress:
+                    progress(f"reheat {reheats}: greedy passes stalled; temperature back to {cycle_temp:.3f}")
+        elif temp == 0 and pass_gain < cfg.eps:
             stop_reason = "converged"
             break
-        temp = temp0 * max(0.0, 1.0 - pass_idx / max(cfg.anneal_passes, 1))
+        temp = cycle_temp * max(0.0, 1.0 - (pass_idx - cycle0) / max(cfg.anneal_passes, 1))
         if temp < 1e-9:
             temp = 0.0
 
@@ -211,5 +296,5 @@ def optimize_part(part: PartState, proposer, w, cfg: LoopConfig, history: Histor
     return {
         "proposer": proposer.name, "iterations": it, "evals": part.n_evals, "passes": pass_idx,
         "stop": stop_reason, "seconds": time.time() - t_start, "total": final,
-        "curve": curve, "warmup_evals": warm_evals, "scales": part.norm.scales(),
+        "curve": curve, "warmup_evals": warm_evals, "scales": part.norm.scales(), "reheats": reheats,
     }

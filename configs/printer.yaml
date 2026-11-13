@@ -16,6 +16,32 @@ retract_speed: 35
 z_hop: 0.0
 z_speed: 10
 layer_change_time: 0.5
+# Shell + infill. walls: wall rings along every outline (outer contour and holes), printed
+# as fixed loops. solid_layers: solid skin within this many layers of any top or bottom
+# surface. infill: share of the remaining (inside) cells to keep, 0.4 = remove 60%; the
+# optimizer decides where. infill_rule: how the target is held. penalty: a score term,
+# one percentage point off target costing infill_weight x a 1% change in a weight-1 term;
+# band: hard limit of target +- infill_band; both: the penalty inside the band; free: the
+# target only sets the start. infill_pattern: starting infill lines alternate 0/90 by layer,
+# or stacked in one direction (--fill zigzag: 0, zigzag90: 90) so adjacent layers' lines
+# overlap and bond; skins alternate either way. max_bridge: longest span (mm) a filled cell
+# may bridge over the layer below. walls: 0, solid_layers: 0, infill: 1 fills every cell
+# (the original mode).
+walls: 2
+solid_layers: 3
+infill: 0.4
+infill_rule: both
+infill_band: 0.02
+infill_weight: 1.0
+infill_pattern: stacked
+max_bridge: 4.0
+# Grid cell in mm. Below bead_width, beads (still bead_width wide) sit anywhere on this finer
+# grid, and walls follow the true outline to one cell; cells per bead must be even. 0 = one
+# cell per bead (the 0.4 mm grid the trained policy uses; much faster per edit).
+cell: 0.1
+cover_weight: 1.0        # fine grid: cost of gaps in walls/skin and of over-extrusion
+# Strength analysis: element size in mm (must divide the cell; 0 = one element per cell).
+fea_element: 0.1
 bed_center: [110, 110]
 nozzle_temp: 210
 bed_temp: 60

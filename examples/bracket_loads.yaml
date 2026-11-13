@@ -9,3 +9,7 @@ loads:
 point_loads:
   - pos: [34, 4, 2.0]
     force: [0, -25, 4]
+# Extra load cases: strength is then scored on every case against its own baseline,
+# so no single pull is optimized at the others' expense. Same as --load-cases 5.
+# random_cases: 5
+# random_seed: 0

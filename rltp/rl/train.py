@@ -23,7 +23,7 @@ from rltp.rl.shapes import FAMILIES, HOLDOUT_FAMILIES
 log = logging.getLogger(__name__)
 
 ENV_KEYS = ("grid", "terms", "ops", "episode_len", "families", "neighbors", "p", "min_cells",
-            "mesh_dir", "mesh_frac", "fixed_w", "baselines")
+            "mesh_dir", "mesh_frac", "fixed_w", "baselines", "accept", "norm")
 
 
 def env_kwargs_for(stage: dict, defaults: dict) -> dict:

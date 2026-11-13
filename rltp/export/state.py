@@ -46,6 +46,8 @@ def save_state(path, part, meta: dict | None = None) -> None:
         order = ev.timing.order
         seqs = [pc.cells[pid] for pid in order]
         arrs[f"L{k}_mask"] = L.mask.astype(bool)
+        if L.sparse:
+            arrs[f"L{k}_part"] = L.part.astype(bool)
         arrs[f"L{k}_frame"] = np.array([L.frame.ox, L.frame.oy, L.frame.theta, L.frame.p])
         arrs[f"L{k}_zh"] = np.array([L.z, L.h, ev.T])
         arrs[f"L{k}_nxt"] = L.nxt.astype(np.int32)
@@ -86,6 +88,7 @@ def load_state(path) -> dict:
             layers.append({
                 "k": k,
                 "mask": g("mask").astype(bool),
+                "part": (z[f"L{k}_part"] if f"L{k}_part" in z.files else g("mask")).astype(bool),
                 "frame": {"ox": float(fr[0]), "oy": float(fr[1]), "theta": float(fr[2]), "p": float(fr[3])},
                 "z": float(zh[0]), "h": float(zh[1]), "T": float(zh[2]),
                 "nxt": g("nxt").astype(np.int64),

@@ -1,0 +1,5 @@
+[rltp] bench: 4 shapes x 3 proposers x 1 seeds, budget 128 evals, families ('ribs',), terms ('strength',)
+[rltp]   policy        mean gain 0.1762 +- 0.1506   FI_agg -15.2%
+[rltp]   policy-sample mean gain 0.1760 +- 0.1485   FI_agg -15.2%
+[rltp]   sa            mean gain 0.1519 +- 0.1427   FI_agg -13.2%
+[rltp] wrote runs/repro/bench_check_ops/score_vs_evals.png

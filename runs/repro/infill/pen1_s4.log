@@ -1,0 +1,45 @@
+[rltp] sliced 10 layers, grid 77x102 at p=0.4 mm, 24478 cells (0.3s)
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 24478 of 29420 cells filled, infill 40.3% of the optional cells (target 40%, rule penalty), 0 unsupported
+[rltp] iter 200 evals 200 total -1.8315 temp 0.100
+[rltp] pass 0: gain 0.0349 accepted 89/320 total -1.8103 best -1.8103 temp 0.100 drift 1.71e-12
+[rltp] iter 400 evals 400 total -1.8002 temp 0.075
+[rltp] iter 600 evals 600 total -1.7785 temp 0.075
+[rltp] pass 1: gain 0.0338 accepted 84/320 total -1.7764 best -1.7764 temp 0.075 drift 2.82e-12
+[rltp] iter 800 evals 800 total -1.7724 temp 0.050
+[rltp] pass 2: gain 0.0179 accepted 83/320 total -1.7585 best -1.7585 temp 0.050 drift 2.17e-13
+[rltp] iter 1000 evals 1000 total -1.7594 temp 0.025
+[rltp] iter 1200 evals 1200 total -1.7497 temp 0.025
+[rltp] pass 3: gain 0.0162 accepted 73/320 total -1.7423 best -1.7423 temp 0.025 drift 2.99e-12
+[rltp] iter 1400 evals 1400 total -1.7337 temp 0.000
+[rltp] iter 1600 evals 1600 total -1.7240 temp 0.000
+[rltp] pass 4: gain 0.0183 accepted 25/320 total -1.7240 best -1.7240 temp 0.000 drift 5.12e-12
+[rltp] iter 1800 evals 1800 total -1.7189 temp 0.000
+[rltp] pass 5: gain 0.0107 accepted 21/320 total -1.7133 best -1.7133 temp 0.000 drift 1.47e-13
+[rltp] iter 2000 evals 2000 total -1.7124 temp 0.000
+[rltp] iter 2200 evals 2200 total -1.7043 temp 0.000
+[rltp] pass 6: gain 0.0093 accepted 24/320 total -1.7040 best -1.7040 temp 0.000 drift 4.09e-12
+[rltp] iter 2400 evals 2400 total -1.7023 temp 0.000
+[rltp] pass 7: gain 0.0096 accepted 17/320 total -1.6943 best -1.6943 temp 0.000 drift 7.76e-12
+[rltp] iter 2600 evals 2600 total -1.6943 temp 0.000
+[rltp] iter 2800 evals 2800 total -1.6849 temp 0.000
+[rltp] pass 8: gain 0.0146 accepted 15/320 total -1.6797 best -1.6797 temp 0.000 drift 1.05e-11
+[rltp] iter 3000 evals 3000 total -1.6750 temp 0.000
+[rltp] iter 3200 evals 3200 total -1.6676 temp 0.000
+[rltp] pass 9: gain 0.0122 accepted 16/320 total -1.6676 best -1.6676 temp 0.000 drift 8.81e-12
+[rltp] iter 3400 evals 3400 total -1.6618 temp 0.000
+[rltp] pass 10: gain 0.0130 accepted 21/320 total -1.6546 best -1.6546 temp 0.000 drift 2.06e-13
+[rltp] iter 3600 evals 3600 total -1.6531 temp 0.000
+[rltp] iter 3800 evals 3800 total -1.6467 temp 0.000
+[rltp] pass 11: gain 0.0085 accepted 19/320 total -1.6461 best -1.6461 temp 0.000 drift 4.53e-12
+[rltp] iter 4000 evals 4000 total -1.6436 temp 0.000
+[rltp] pass 12: gain 0.0025 accepted 4/160 total -1.6436 best -1.6436 temp 0.000 drift 2.30e-12
+[rltp] wrote runs/repro/infill/pen1_s4/part.gcode, viewer.html, history.jsonl, metrics.json (0.2s)
+[rltp] sa: 4000 evals, 13 passes, stop=max_evals, 81.3s
+[rltp]   fi_agg              0.729 ->     0.7255
+[rltp]   inter_fi_agg            0 ->          0
+[rltp]   time_s              333.9 ->      334.9
+[rltp]   strokes               288 ->        248
+[rltp]   travel_mm           865.1 ->      549.9
+[rltp]   boundary_ends          10 ->          9
+[rltp]   cells           2.448e+04 ->  2.445e+04
+[rltp]   infill_pct          40.31 ->      40.02

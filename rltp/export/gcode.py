@@ -54,11 +54,17 @@ def part_offset(part: PartState, pr: Printer) -> np.ndarray:
 def layer_strokes_world(L, ev, offset):
     """[(xy points incl. loop closure, is_loop, single)] in print order, world + offset."""
     pc = get_pieces(L)
+    poly = None
+    if L.kb > 1:                      # fine bead grid: diagonal staircases print as straight moves
+        from rltp.cover.beads import runs
+        poly = runs(L)["poly"]
     out = []
     for pid in ev.timing.order:
         cells = pc.cells[pid]
         loop = bool(pc.is_loop[pid])
         seq = np.append(cells, cells[0]) if loop else cells
+        if poly is not None and len(cells) > 1:
+            seq = poly[pid][0]
         x, y = L.frame.cell_xy(seq, L.W)
         out.append((np.stack([x, y], 1) + offset, loop, len(cells) == 1))
     return out

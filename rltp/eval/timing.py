@@ -206,3 +206,65 @@ def time_layer(L: Layer, pc: Pieces, mot: Motion) -> Timing:
     t_cell[allc[first_idx]] = stroke_start
     return Timing(T, t_cell, order, stroke_start, stroke_time, t_tr, dist, retract,
                   (float(eu[-1]), float(ev[-1])))
+
+
+def time_polylines(L: Layer, pc: Pieces, mot: Motion, poly: dict) -> Timing:
+    """time_layer for a fine bead grid: strokes are printed as polylines (straight axis runs
+    and diagonal runs as single moves, poly[pid] = (vertex nodes, segment of each link)),
+    so a staircase diagonal is one move instead of many 90-degree corners. Node times are
+    interpolated along each segment."""
+    p, W, n = L.frame.p, L.W, L.n
+    order = order_strokes(pc, W, p)
+    S = len(order)
+    t_cell = np.full(n, np.nan)
+    if S == 0:
+        z = np.zeros(0)
+        return Timing(0.0, t_cell, order, z, z, z, z, z.astype(bool), (0.0, 0.0))
+    stroke_time = np.zeros(S)
+    su = np.zeros(S)
+    sv = np.zeros(S)
+    eu = np.zeros(S)
+    ev = np.zeros(S)
+    local = []
+    for si, pid in enumerate(order):
+        cells = np.asarray(pc.cells[pid], np.int64)
+        loop = bool(pc.is_loop[pid])
+        verts, link_seg = poly[pid]
+        r, c = np.divmod(verts, W)
+        u, v = (c + 0.5) * p, (r + 0.5) * p
+        su[si], sv[si] = u[0], v[0]
+        eu[si], ev[si] = u[-1], v[-1]
+        if len(verts) < 2:
+            stroke_time[si] = float(trapezoid_time(0.0, 0.0, mot.v, mot.a, p / 2))
+            local.append((cells, np.zeros(len(cells))))
+            continue
+        seg = np.stack([np.diff(u), np.diff(v)], 1)
+        seg_len = np.linalg.norm(seg, axis=1)
+        dirs = seg / np.maximum(seg_len[:, None], 1e-12)
+        lim2 = np.zeros(len(seg_len) + 1)
+        if len(seg_len) > 1:
+            lim2[1:-1] = np.minimum(junction_v2(dirs[:-1], dirs[1:], mot.a, mot.jd), mot.v ** 2)
+        w = plan(lim2, seg_len, mot.a)
+        vn = np.sqrt(w)
+        v0, v1 = vn[:-1], vn[1:]
+        seg_T = trapezoid_time(v0, v1, mot.v, mot.a, seg_len)
+        stroke_time[si] = float(seg_T.sum())
+        cumT = np.concatenate([[0.0], np.cumsum(seg_T)[:-1]])
+        cnt = np.bincount(link_seg, minlength=len(seg_len))
+        q = np.arange(len(link_seg)) - np.searchsorted(link_seg, link_seg, "left") + 1
+        dist = q / np.maximum(cnt[link_seg], 1) * seg_len[link_seg]
+        t_links = cumT[link_seg] + time_at(v0[link_seg], v1[link_seg], mot.v, mot.a, seg_len[link_seg], dist)
+        nodes_t = np.concatenate([[0.0], t_links[:len(cells) - 1]])
+        local.append((cells, nodes_t))
+    prev_u = np.concatenate([[0.0], eu[:-1]])
+    prev_v = np.concatenate([[0.0], ev[:-1]])
+    dist = np.hypot(su - prev_u, sv - prev_v)
+    retract = dist > mot.retract_min + 1e-9
+    retract[0] = True
+    t_tr = trapezoid_time(0.0, 0.0, mot.v_travel, mot.a_travel, dist)
+    t_tr = t_tr + retract * (2 * mot.retract_len / mot.retract_speed + 2 * mot.z_hop / mot.z_speed)
+    stroke_start = np.cumsum(t_tr + np.concatenate([[0.0], stroke_time[:-1]]))
+    T = float(stroke_start[-1] + stroke_time[-1])
+    for si, (cells, nodes_t) in enumerate(local):
+        t_cell[cells] = stroke_start[si] + nodes_t
+    return Timing(T, t_cell, order, stroke_start, stroke_time, t_tr, dist, retract, (float(eu[-1]), float(ev[-1])))

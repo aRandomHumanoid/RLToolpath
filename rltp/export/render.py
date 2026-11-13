@@ -362,8 +362,11 @@ def render(out_dir, mode: str = "layer", layer: int | None = None, frames: int =
         hcolor = "direction" if color in ("fi", "order") else color
         for i in pick:
             it, nxt, prv, seams, changed = states[i]
+            part = lay.get("part", lay["mask"])
+            filled = (part.reshape(-1) & (nxt != -2)).reshape(part.shape)   # -2: empty (sparse layers)
             ax.clear()
-            draw_layer(ax, lay["mask"], lay["frame"], nxt, prv, seams, color=hcolor, highlight=changed,
+            draw_layer(ax, filled, lay["frame"], np.where(nxt == -2, -1, nxt), prv, seams, color=hcolor,
+                       highlight=changed,
                        title=f"layer {k}  " + ("baseline" if it < 0 else f"after iteration {it}"))
             sink.add()
         return sink.close()

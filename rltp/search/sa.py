@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from rltp.cover.ops import apply_action, sample_valid
+from rltp.cover.ops import InvalidEdit, apply_action, sample_valid
 
 
 class Proposer:
@@ -20,12 +20,20 @@ class Proposer:
         raise NotImplementedError
 
 
+def _weights(self, part, k):
+    """Per-cell proposal weights for layer k when stress-biased (else None)."""
+    if getattr(self, "bias", 0.0) <= 0:
+        return None
+    return part.proposal_weights(k)
+
+
 class RandomProposer(Proposer):
     name = "random"
     temp0 = 0.0
+    bias = 0.0           # share of proposals placed by local stress (set by the loop)
 
     def propose(self, part, k, M, w, rng):
-        a = int(sample_valid(M, rng)[0])
+        a = int(sample_valid(M, rng, weights=_weights(self, part, k), bias=self.bias)[0])
         return a, None
 
 
@@ -41,18 +49,25 @@ class GreedyProposer(Proposer):
     name = "greedy"
     temp0 = 0.0
 
+    bias = 0.0
+
     def __init__(self, n: int = 16):
         self.n = n
 
     def propose(self, part, k, M, w, rng):
-        acts = np.unique(sample_valid(M, rng, self.n))
+        acts = np.unique(sample_valid(M, rng, self.n, weights=_weights(self, part, k), bias=self.bias))
         best = None
         for a in acts:
-            newL, _ = apply_action(part.layers[k], int(a))
+            try:
+                newL, _ = apply_action(part.layers[k], int(a))
+            except InvalidEdit:
+                continue
             c = part.propose(k, newL)
             s = part.norm.total(c.d, w)
             if best is None or s > best[0]:
                 best = (s, int(a), c)
+        if best is None:
+            return None, None
         return best[1], best[2]
 
 

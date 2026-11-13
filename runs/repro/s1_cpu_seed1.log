@@ -1,0 +1,164 @@
+[rltp] policy: 2.12M weights
+[rltp] == s1_strength: {'p': 0.4, 'episode_len': 64, 'grid': 32, 'terms': ['strength'], 'ops': ['flip_right', 'flip_down', 'patch5_0', 'patch5_90', 'patch9_0', 'patch9_90'], 'families': ['star', 'blobs', 'plate_holes', 'bracket']}
+[rltp] bc epoch 0: loss=7.4892, val_acc_cand=0.1212, val_acc_full=0.0225, val_regret=1.2840
+[rltp] bc epoch 1: loss=7.1492, val_acc_cand=0.1225, val_acc_full=0.0213, val_regret=1.1135
+[rltp] bc epoch 2: loss=6.9837, val_acc_cand=0.1900, val_acc_full=0.0288, val_regret=0.9507
+[rltp] bc epoch 3: loss=6.8596, val_acc_cand=0.2075, val_acc_full=0.0288, val_regret=0.9171
+[rltp] bc epoch 4: loss=6.7610, val_acc_cand=0.2200, val_acc_full=0.0375, val_regret=0.9676
+[rltp] bc epoch 5: loss=6.6825, val_acc_cand=0.2150, val_acc_full=0.0262, val_regret=0.8880
+[rltp] bc epoch 6: loss=6.5977, val_acc_cand=0.2200, val_acc_full=0.0288, val_regret=0.8860
+[rltp] bc epoch 7: loss=6.5189, val_acc_cand=0.2412, val_acc_full=0.0350, val_regret=0.8463
+[rltp] bc epoch 8: loss=6.4373, val_acc_cand=0.2275, val_acc_full=0.0325, val_regret=0.6816
+[rltp] bc epoch 9: loss=6.3530, val_acc_cand=0.2387, val_acc_full=0.0312, val_regret=0.7250
+[rltp] bc epoch 10: loss=6.2630, val_acc_cand=0.2325, val_acc_full=0.0325, val_regret=0.7919
+[rltp] bc epoch 11: loss=6.1825, val_acc_cand=0.2475, val_acc_full=0.0325, val_regret=0.8020
+[rltp] bc epoch 12: loss=6.1138, val_acc_cand=0.2462, val_acc_full=0.0338, val_regret=0.7576
+[rltp] bc epoch 13: loss=6.0699, val_acc_cand=0.2400, val_acc_full=0.0338, val_regret=0.8305
+[rltp] bc epoch 14: loss=6.0463, val_acc_cand=0.2400, val_acc_full=0.0338, val_regret=0.8367
+[rltp] ppo upd 1/146 step 1024 ep_return 1.0234562769066702 ent 6.289 kl 0.0219 sps 43
+[rltp] ppo upd 2/146 step 2048 ep_return 0.977662071757885 ent 6.186 kl 0.0192 sps 11
+[rltp] ppo upd 3/146 step 3072 ep_return 1.0160579895555095 ent 6.245 kl 0.0158 sps 16
+[rltp] ppo upd 4/146 step 4096 ep_return 1.532954593602296 ent 6.334 kl 0.0173 sps 20
+[rltp] ppo upd 5/146 step 5120 ep_return 1.619448941721456 ent 6.448 kl 0.0157 sps 24
+[rltp] ppo upd 6/146 step 6144 ep_return 2.116065821100534 ent 6.094 kl 0.0153 sps 27
+[rltp] ppo upd 7/146 step 7168 ep_return 2.3683522531568597 ent 6.344 kl 0.0187 sps 30
+[rltp] ppo upd 8/146 step 8192 ep_return 1.930067252592856 ent 6.465 kl 0.0164 sps 32
+[rltp] ppo upd 9/146 step 9216 ep_return 2.1592069151220024 ent 6.528 kl 0.0143 sps 34
+[rltp] ppo upd 10/146 step 10240 ep_return 1.9931164953262022 ent 6.297 kl 0.0168 sps 36
+[rltp] ppo upd 11/146 step 11264 ep_return 2.1718627032753908 ent 6.507 kl 0.0175 sps 38
+[rltp] ppo upd 12/146 step 12288 ep_return 2.5726856810171683 ent 6.382 kl 0.0174 sps 39
+[rltp] ppo upd 13/146 step 13312 ep_return 2.3330026368656323 ent 6.260 kl 0.0146 sps 41
+[rltp] ppo upd 14/146 step 14336 ep_return 2.4011710995557247 ent 6.540 kl 0.0199 sps 42
+[rltp] ppo upd 15/146 step 15360 ep_return 2.513009129845253 ent 6.373 kl 0.0166 sps 43
+[rltp] ppo upd 16/146 step 16384 ep_return 2.5968549372871275 ent 6.460 kl 0.0187 sps 44
+[rltp] ppo upd 17/146 step 17408 ep_return 3.034409091318821 ent 6.326 kl 0.0160 sps 45
+[rltp] ppo upd 18/146 step 18432 ep_return 2.7150149034248394 ent 6.563 kl 0.0156 sps 46
+[rltp] ppo upd 19/146 step 19456 ep_return 2.1588408628930362 ent 6.296 kl 0.0164 sps 46
+[rltp] ppo upd 20/146 step 20480 ep_return 1.898024892395373 ent 6.045 kl 0.0153 sps 47
+[rltp] ppo upd 21/146 step 21504 ep_return 1.417498575275201 ent 5.921 kl 0.0206 sps 48
+[rltp] ppo upd 22/146 step 22528 ep_return 1.7142131025322571 ent 6.302 kl 0.0171 sps 48
+[rltp] ppo upd 23/146 step 23552 ep_return 1.9170096306051865 ent 6.106 kl 0.0162 sps 48
+[rltp] ppo upd 24/146 step 24576 ep_return 2.0710440238362358 ent 6.499 kl 0.0144 sps 49
+[rltp] ppo upd 25/146 step 25600 ep_return 2.545870576063529 ent 6.398 kl 0.0207 sps 49
+[rltp] ppo upd 26/146 step 26624 ep_return 2.3367946614187103 ent 6.364 kl 0.0188 sps 50
+[rltp] ppo upd 27/146 step 27648 ep_return 2.1438182056325807 ent 6.511 kl 0.0158 sps 50
+[rltp] ppo upd 28/146 step 28672 ep_return 2.04339923425181 ent 6.292 kl 0.0150 sps 51
+[rltp] ppo upd 29/146 step 29696 ep_return 1.8648566426704778 ent 6.583 kl 0.0151 sps 51
+[rltp] ppo upd 30/146 step 30720 ep_return 1.7609326988952376 ent 6.250 kl 0.0168 sps 51
+[rltp] ppo upd 31/146 step 31744 ep_return 2.166899299238514 ent 6.406 kl 0.0141 sps 52
+[rltp] ppo upd 32/146 step 32768 ep_return 2.1945101118433006 ent 6.255 kl 0.0196 sps 52
+[rltp] ppo upd 33/146 step 33792 ep_return 1.8798334256053015 ent 6.353 kl 0.0213 sps 53
+[rltp] ppo upd 34/146 step 34816 ep_return 2.326238079726018 ent 6.094 kl 0.0209 sps 54
+[rltp] ppo upd 35/146 step 35840 ep_return 1.9097489869342767 ent 6.182 kl 0.0190 sps 55
+[rltp] ppo upd 36/146 step 36864 ep_return 2.0828721544616933 ent 6.365 kl 0.0150 sps 55
+[rltp] ppo upd 37/146 step 37888 ep_return 2.6422272054448577 ent 6.219 kl 0.0164 sps 56
+[rltp] ppo upd 38/146 step 38912 ep_return 2.7356574786109573 ent 6.127 kl 0.0129 sps 57
+[rltp] ppo upd 39/146 step 39936 ep_return 2.717658230143815 ent 6.350 kl 0.0102 sps 57
+[rltp] ppo upd 40/146 step 40960 ep_return 2.6225324046292 ent 6.180 kl 0.0180 sps 58
+[rltp] ppo upd 41/146 step 41984 ep_return 2.0130713088341396 ent 6.333 kl 0.0132 sps 59
+[rltp] ppo upd 42/146 step 43008 ep_return 1.7260081049821183 ent 6.238 kl 0.0178 sps 59
+[rltp] ppo upd 43/146 step 44032 ep_return 2.0087670614844404 ent 6.379 kl 0.0142 sps 60
+[rltp] ppo upd 44/146 step 45056 ep_return 2.0792636874864985 ent 6.233 kl 0.0164 sps 60
+[rltp] ppo upd 45/146 step 46080 ep_return 2.715807640655883 ent 6.330 kl 0.0138 sps 61
+[rltp] ppo upd 46/146 step 47104 ep_return 2.6103327173067523 ent 6.201 kl 0.0169 sps 62
+[rltp] ppo upd 47/146 step 48128 ep_return 2.7660638007287512 ent 6.392 kl 0.0122 sps 62
+[rltp] ppo upd 48/146 step 49152 ep_return 2.5842561653150202 ent 6.121 kl 0.0135 sps 63
+[rltp] ppo upd 49/146 step 50176 ep_return 2.4862868524811645 ent 6.332 kl 0.0152 sps 63
+[rltp] ppo upd 50/146 step 51200 ep_return 2.3970238582146393 ent 6.078 kl 0.0177 sps 64
+[rltp] ppo upd 51/146 step 52224 ep_return 2.138010753002371 ent 5.978 kl 0.0130 sps 64
+[rltp] ppo upd 52/146 step 53248 ep_return 2.478095464727642 ent 6.112 kl 0.0173 sps 65
+[rltp] ppo upd 53/146 step 54272 ep_return 2.199913289888007 ent 6.361 kl 0.0184 sps 65
+[rltp] ppo upd 54/146 step 55296 ep_return 2.6327930508466117 ent 6.155 kl 0.0183 sps 66
+[rltp] ppo upd 55/146 step 56320 ep_return 2.935553064978046 ent 6.366 kl 0.0151 sps 66
+[rltp] ppo upd 56/146 step 57344 ep_return 2.8050887261318818 ent 6.118 kl 0.0153 sps 67
+[rltp] ppo upd 57/146 step 58368 ep_return 3.047962932160426 ent 6.190 kl 0.0138 sps 67
+[rltp] ppo upd 58/146 step 59392 ep_return 2.948476312361735 ent 6.224 kl 0.0135 sps 68
+[rltp] ppo upd 59/146 step 60416 ep_return 2.754899323079697 ent 6.148 kl 0.0122 sps 68
+[rltp] ppo upd 60/146 step 61440 ep_return 2.3785124762016787 ent 6.370 kl 0.0153 sps 68
+[rltp] ppo upd 61/146 step 62464 ep_return 2.4971440590150698 ent 6.203 kl 0.0157 sps 69
+[rltp] ppo upd 62/146 step 63488 ep_return 2.4886125317255114 ent 5.913 kl 0.0131 sps 69
+[rltp] ppo upd 63/146 step 64512 ep_return 2.452205419724252 ent 6.368 kl 0.0202 sps 70
+[rltp] ppo upd 64/146 step 65536 ep_return 2.3195771801677685 ent 6.366 kl 0.0115 sps 70
+[rltp] ppo upd 65/146 step 66560 ep_return 1.998481693711598 ent 6.015 kl 0.0085 sps 70
+[rltp] ppo upd 66/146 step 67584 ep_return 2.2597067021572634 ent 6.389 kl 0.0132 sps 71
+[rltp] ppo upd 67/146 step 68608 ep_return 2.543260705675836 ent 6.287 kl 0.0080 sps 71
+[rltp] ppo upd 68/146 step 69632 ep_return 2.7355507768329006 ent 6.192 kl 0.0116 sps 72
+[rltp] ppo upd 69/146 step 70656 ep_return 2.8033022728596793 ent 6.191 kl 0.0115 sps 72
+[rltp] ppo upd 70/146 step 71680 ep_return 2.117026985291898 ent 6.336 kl 0.0121 sps 72
+[rltp] ppo upd 71/146 step 72704 ep_return 1.9342862980155677 ent 6.124 kl 0.0121 sps 73
+[rltp] ppo upd 72/146 step 73728 ep_return 1.8600740478891336 ent 6.335 kl 0.0131 sps 73
+[rltp] ppo upd 73/146 step 74752 ep_return 2.223146231938995 ent 6.491 kl 0.0101 sps 73
+[rltp] ppo upd 74/146 step 75776 ep_return 2.5939694573449916 ent 6.226 kl 0.0091 sps 74
+[rltp] ppo upd 75/146 step 76800 ep_return 2.206519320691759 ent 6.576 kl 0.0098 sps 74
+[rltp] ppo upd 76/146 step 77824 ep_return 2.8678830581586823 ent 6.152 kl 0.0085 sps 74
+[rltp] ppo upd 77/146 step 78848 ep_return 2.6660641967902703 ent 6.119 kl 0.0105 sps 75
+[rltp] ppo upd 78/146 step 79872 ep_return 2.5882571604311413 ent 6.195 kl 0.0082 sps 75
+[rltp] ppo upd 79/146 step 80896 ep_return 3.0698019418661806 ent 6.451 kl 0.0108 sps 75
+[rltp] ppo upd 80/146 step 81920 ep_return 2.503051150726353 ent 6.529 kl 0.0120 sps 75
+[rltp] ppo upd 81/146 step 82944 ep_return 2.7240503250393266 ent 6.426 kl 0.0104 sps 76
+[rltp] ppo upd 82/146 step 83968 ep_return 2.8677223562239185 ent 6.261 kl 0.0088 sps 76
+[rltp] ppo upd 83/146 step 84992 ep_return 2.414180436335643 ent 6.413 kl 0.0108 sps 76
+[rltp] ppo upd 84/146 step 86016 ep_return 2.496811211133782 ent 5.889 kl 0.0096 sps 76
+[rltp] ppo upd 85/146 step 87040 ep_return 2.4954875165739225 ent 6.252 kl 0.0110 sps 77
+[rltp] ppo upd 86/146 step 88064 ep_return 2.2121202035154472 ent 6.146 kl 0.0096 sps 77
+[rltp] ppo upd 87/146 step 89088 ep_return 2.780421955970735 ent 6.379 kl 0.0119 sps 77
+[rltp] ppo upd 88/146 step 90112 ep_return 3.10849185715007 ent 6.261 kl 0.0085 sps 77
+[rltp] ppo upd 89/146 step 91136 ep_return 2.688469963004825 ent 5.912 kl 0.0145 sps 78
+[rltp] ppo upd 90/146 step 92160 ep_return 3.0845526327340194 ent 6.309 kl 0.0082 sps 78
+[rltp] ppo upd 91/146 step 93184 ep_return 3.1900768271197606 ent 6.113 kl 0.0053 sps 78
+[rltp] ppo upd 92/146 step 94208 ep_return 2.707738568335113 ent 6.161 kl 0.0060 sps 78
+[rltp] ppo upd 93/146 step 95232 ep_return 2.914373969518615 ent 5.942 kl 0.0072 sps 79
+[rltp] ppo upd 94/146 step 96256 ep_return 3.146440211105161 ent 6.161 kl 0.0081 sps 79
+[rltp] ppo upd 95/146 step 97280 ep_return 2.7400151159332475 ent 6.035 kl 0.0059 sps 79
+[rltp] ppo upd 96/146 step 98304 ep_return 3.2246678306288628 ent 6.117 kl 0.0080 sps 79
+[rltp] ppo upd 97/146 step 99328 ep_return 3.3838204865304173 ent 6.001 kl 0.0046 sps 80
+[rltp] ppo upd 98/146 step 100352 ep_return 2.923132118133122 ent 5.922 kl 0.0103 sps 80
+[rltp] ppo upd 99/146 step 101376 ep_return 2.8446923431977096 ent 6.179 kl 0.0047 sps 80
+[rltp] ppo upd 100/146 step 102400 ep_return 2.5999815738028316 ent 6.353 kl 0.0081 sps 80
+[rltp] ppo upd 101/146 step 103424 ep_return 2.493948268345077 ent 5.896 kl 0.0065 sps 80
+[rltp] ppo upd 102/146 step 104448 ep_return 2.5917281924190725 ent 5.806 kl 0.0065 sps 81
+[rltp] ppo upd 103/146 step 105472 ep_return 2.8602959325761828 ent 6.291 kl 0.0065 sps 81
+[rltp] ppo upd 104/146 step 106496 ep_return 3.1214137768072074 ent 5.727 kl 0.0068 sps 81
+[rltp] ppo upd 105/146 step 107520 ep_return 2.9555401406142225 ent 5.973 kl 0.0050 sps 81
+[rltp] ppo upd 106/146 step 108544 ep_return 3.226567129130759 ent 6.089 kl 0.0059 sps 81
+[rltp] ppo upd 107/146 step 109568 ep_return 2.816088994878476 ent 6.315 kl 0.0055 sps 81
+[rltp] ppo upd 108/146 step 110592 ep_return 2.691941219962651 ent 6.338 kl 0.0045 sps 82
+[rltp] ppo upd 109/146 step 111616 ep_return 2.6509545483031074 ent 5.944 kl 0.0077 sps 82
+[rltp] ppo upd 110/146 step 112640 ep_return 2.1631163153233457 ent 6.191 kl 0.0060 sps 82
+[rltp] ppo upd 111/146 step 113664 ep_return 2.0997828345253766 ent 6.007 kl 0.0042 sps 82
+[rltp] ppo upd 112/146 step 114688 ep_return 2.379925876624795 ent 6.016 kl 0.0040 sps 82
+[rltp] ppo upd 113/146 step 115712 ep_return 2.390632195729051 ent 6.411 kl 0.0036 sps 82
+[rltp] ppo upd 114/146 step 116736 ep_return 2.4062805039621034 ent 6.212 kl 0.0051 sps 83
+[rltp] ppo upd 115/146 step 117760 ep_return 3.359030498072906 ent 6.032 kl 0.0043 sps 83
+[rltp] ppo upd 116/146 step 118784 ep_return 2.7333102000124176 ent 5.794 kl 0.0033 sps 83
+[rltp] ppo upd 117/146 step 119808 ep_return 2.950778807589412 ent 5.823 kl 0.0038 sps 83
+[rltp] ppo upd 118/146 step 120832 ep_return 2.983993582102249 ent 5.859 kl 0.0036 sps 83
+[rltp] ppo upd 119/146 step 121856 ep_return 2.5199268634736036 ent 5.740 kl 0.0042 sps 84
+[rltp] ppo upd 120/146 step 122880 ep_return 2.831747605256888 ent 5.716 kl 0.0051 sps 84
+[rltp] ppo upd 121/146 step 123904 ep_return 2.5319784008374713 ent 6.211 kl 0.0028 sps 84
+[rltp] ppo upd 122/146 step 124928 ep_return 2.8277326932788105 ent 5.870 kl 0.0022 sps 84
+[rltp] ppo upd 123/146 step 125952 ep_return 2.835646005637786 ent 5.978 kl 0.0024 sps 84
+[rltp] ppo upd 124/146 step 126976 ep_return 2.8740484841947156 ent 6.092 kl 0.0027 sps 84
+[rltp] ppo upd 125/146 step 128000 ep_return 3.1346854307376018 ent 5.479 kl 0.0017 sps 84
+[rltp] ppo upd 126/146 step 129024 ep_return 3.106755327133038 ent 5.860 kl 0.0041 sps 84
+[rltp] ppo upd 127/146 step 130048 ep_return 3.083805689401715 ent 5.845 kl 0.0023 sps 85
+[rltp] ppo upd 128/146 step 131072 ep_return 2.8141008847097186 ent 6.309 kl 0.0019 sps 85
+[rltp] ppo upd 129/146 step 132096 ep_return 2.7434723505343097 ent 5.668 kl 0.0024 sps 85
+[rltp] ppo upd 130/146 step 133120 ep_return 2.92081126382525 ent 5.857 kl 0.0021 sps 85
+[rltp] ppo upd 131/146 step 134144 ep_return 3.121227876324741 ent 6.089 kl 0.0021 sps 85
+[rltp] ppo upd 132/146 step 135168 ep_return 3.4275540769710005 ent 6.119 kl 0.0047 sps 85
+[rltp] ppo upd 133/146 step 136192 ep_return 3.1348870509384734 ent 5.938 kl 0.0015 sps 86
+[rltp] ppo upd 134/146 step 137216 ep_return 2.7400405884867824 ent 5.938 kl 0.0013 sps 86
+[rltp] ppo upd 135/146 step 138240 ep_return 2.4529833529521508 ent 5.624 kl 0.0008 sps 86
+[rltp] ppo upd 136/146 step 139264 ep_return 2.501396832574569 ent 6.412 kl 0.0011 sps 86
+[rltp] ppo upd 137/146 step 140288 ep_return 2.6461298348730935 ent 5.566 kl 0.0012 sps 86
+[rltp] ppo upd 138/146 step 141312 ep_return 2.803722671002312 ent 6.197 kl 0.0004 sps 86
+[rltp] ppo upd 139/146 step 142336 ep_return 2.7772232242516877 ent 5.775 kl 0.0009 sps 86
+[rltp] ppo upd 140/146 step 143360 ep_return 2.566753518898711 ent 6.162 kl 0.0007 sps 87
+[rltp] ppo upd 141/146 step 144384 ep_return 2.5927123565449604 ent 6.447 kl 0.0002 sps 87
+[rltp] ppo upd 142/146 step 145408 ep_return 2.3621891441855816 ent 6.012 kl 0.0003 sps 87
+[rltp] ppo upd 143/146 step 146432 ep_return 2.80021138700876 ent 5.968 kl 0.0003 sps 87
+[rltp] ppo upd 144/146 step 147456 ep_return 2.589359246084064 ent 6.161 kl 0.0001 sps 87
+[rltp] ppo upd 145/146 step 148480 ep_return 2.4636404895941 ent 6.107 kl 0.0001 sps 87
+[rltp] ppo upd 146/146 step 149504 ep_return 2.5781189242617253 ent 6.091 kl 0.0000 sps 87
+[rltp] saved runs/repro/s1_cpu_seed1/policy.pt

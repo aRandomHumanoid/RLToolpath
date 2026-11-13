@@ -41,7 +41,8 @@ def repair(L: Layer, cells=None) -> int:
     """Greedily join 4-adjacent ends of different strokes until no join is possible.
 
     `cells` limits which ends start a join (their neighbours may lie anywhere).
-    Never closes a stroke on itself. Returns the number of joins."""
+    Never closes a stroke on itself, and never touches a sparse layer's wall cells
+    (`L.lock`). Returns the number of joins."""
     pc = walk_pieces(L)
     parent = list(range(pc.count))
 
@@ -53,6 +54,8 @@ def repair(L: Layer, cells=None) -> int:
 
     lab = pc.label
     m = L.flat_mask
+    if L.lock is not None:
+        m = m & ~L.lock.reshape(-1)
     H, W = L.H, L.W
     if cells is None:
         cand = np.nonzero(m & ((L.nxt == -1) | (L.prv == -1)))[0].tolist()
@@ -105,24 +108,37 @@ def _trace_ring(ring: np.ndarray, W: int, H: int):
     return walks
 
 
+def link_ring(L: Layer, ring: np.ndarray) -> None:
+    """Trace a ring of cells (flat bool, all unlinked) into a loop where it closes
+    cleanly, otherwise into short strokes."""
+    H, W = L.H, L.W
+    for seq in _trace_ring(ring, W, H):
+        for x, y in zip(seq[:-1], seq[1:]):
+            link(L, x, y)
+        if len(seq) >= 4 and (seq[0] - seq[-1]) in (1, -1, W, -W):
+            a, b = seq[-1], seq[0]
+            if abs(a - b) == W or (a // W == b // W):
+                link(L, a, b)
+                L.seam.add(seq[0])
+
+
+def rings(mask: np.ndarray, n: int | None = None) -> list[np.ndarray]:
+    """Peel `mask` (bool H x W) ring by ring (8-neighbour erosion); the first n rings."""
+    out = []
+    remaining = mask.copy()
+    st = np.ones((3, 3), bool)
+    while remaining.any() and (n is None or len(out) < n):
+        inner = ndimage.binary_erosion(remaining, structure=st, border_value=0)
+        out.append(remaining & ~inner)
+        remaining = inner
+    return out
+
+
 def concentric(L: Layer) -> None:
     """Peel the mask's outer ring of cells repeatedly; trace each ring into a
     loop where it closes cleanly, otherwise into short strokes."""
-    H, W = L.H, L.W
-    remaining = L.mask.copy()
-    st = np.ones((3, 3), bool)
-    while remaining.any():
-        inner = ndimage.binary_erosion(remaining, structure=st, border_value=0)
-        ring = (remaining & ~inner).reshape(-1)
-        for seq in _trace_ring(ring, W, H):
-            for x, y in zip(seq[:-1], seq[1:]):
-                link(L, x, y)
-            if len(seq) >= 4 and (seq[0] - seq[-1]) in (1, -1, W, -W):
-                a, b = seq[-1], seq[0]
-                if abs(a - b) == W or (a // W == b // W):
-                    link(L, a, b)
-                    L.seam.add(seq[0])
-        remaining = inner
+    for ring in rings(L.mask):
+        link_ring(L, ring.reshape(-1))
     L.invalidate()
 
 

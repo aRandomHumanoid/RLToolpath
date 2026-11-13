@@ -126,3 +126,60 @@ def test_draw_layer_helper(run, tmp_path):
     fig.savefig(tmp_path / "x.png")
     plt.close(fig)
     assert (tmp_path / "x.png").stat().st_size > 1000
+
+
+def test_sparse_history_replays_filled_cells(tmp_path):
+    """Sparse layers: the viewer and history.jsonl replay which cells are filled (empty
+    cells decode as -2) as well as the links, and render draws them."""
+    from rltp.export.viewer import _viewer_nxt
+    poly = Polygon([(0, 0), (9, 0), (9, 5), (0, 5)])
+    mesh = trimesh.creation.extrude_polygon(poly, 1.0)
+    loads = LoadSpec([Region(side="xmin", width=0.4)], [Load2D(Region(side="xmax", width=0.4), (10.0, -4.0))])
+    pr = Printer(walls=1, solid_layers=1, infill=0.25, max_bridge=2.0)
+    part = build_part(mesh, PartSpec(pr, loads, terms=("strength", "time", "cont")), baseline="zigzag")
+    hist = History(str(tmp_path / "history.jsonl"), snapshot_every=5)
+    optimize_part(part, make_proposer("sa"), np.array([1.0, 1.0, 1.0, 0.0]),
+                  LoopConfig(max_evals=300, burst=16, warmup=16), hist)
+    hist.close()
+    fills = [e for e in hist.events if e.get("type") == "edit" and e["accepted"]
+             and e["op"] in ("add", "remove", "fill5_0", "fill5_90", "clear5")]
+    assert fills, "no fill edit was accepted"
+    write_viewer(tmp_path / "viewer.html", part, hist.events, {})
+    save_state(tmp_path / "state.npz", part)
+    data = extract_data((tmp_path / "viewer.html").read_text())
+    jsonl = read_history(tmp_path / "history.jsonl")
+    for k, L in enumerate(part.layers):
+        want = _viewer_nxt(L)
+        nxt, seams = replay_viewer_layer(data, k, data["hist"]["n"])
+        assert (nxt == want).all() and seams == L.seam
+        _, nxt2, _, seams2, _ = list(replay_history(jsonl, k, L.n))[-1]
+        assert (nxt2 == want).all() and seams2 == L.seam
+    assert load_state(tmp_path / "state.npz")["layers"][1]["part"].sum() > part.layers[1].mask.sum()
+    assert render(tmp_path, mode="history", layer=1, frames=2, dest=tmp_path / "h")
+
+
+def test_fine_grid_history_replays(tmp_path):
+    """0.1 mm bead grid: the viewer and history.jsonl replay moved bead nodes exactly."""
+    from rltp.export.viewer import _viewer_nxt
+    poly = Polygon([(0, 0), (5, 0), (5, 3), (0, 3)])
+    mesh = trimesh.creation.extrude_polygon(poly, 0.8)
+    loads = LoadSpec([Region(side="xmin", width=0.3)], [Load2D(Region(side="xmax", width=0.3), (10.0, -4.0))])
+    pr = Printer(walls=1, solid_layers=1, infill=0.4, max_bridge=2.0, cell=0.1, infill_rule="free")
+    part = build_part(mesh, PartSpec(pr, loads, terms=("strength", "time", "cont", "cover")), baseline="zigzag")
+    assert part.layers[0].kb == 4
+    hist = History(str(tmp_path / "history.jsonl"), snapshot_every=5)
+    # temperature 0: every accepted edit improves the score, so the best part is the last one
+    optimize_part(part, make_proposer("random"), np.array([1.0, 1.0, 1.0, 0.0, 0.0, 1.0]),
+                  LoopConfig(max_evals=150, burst=16, warmup=16), hist)
+    hist.close()
+    assert any(e.get("accepted") for e in hist.events if e.get("type") == "edit")
+    write_viewer(tmp_path / "viewer.html", part, hist.events, {})
+    data = extract_data((tmp_path / "viewer.html").read_text())
+    assert data["layers"][0]["k"] == 4
+    jsonl = read_history(tmp_path / "history.jsonl")
+    for k, L in enumerate(part.layers):
+        want = _viewer_nxt(L)
+        nxt, seams = replay_viewer_layer(data, k, data["hist"]["n"])
+        assert (nxt == want).all() and seams == L.seam
+        _, nxt2, _, _, _ = list(replay_history(jsonl, k, L.n))[-1]
+        assert (nxt2 == want).all()

@@ -12,14 +12,54 @@ from rltp.model import Frame, Layer
 from tests.conftest import SHAPES, make_layer
 
 
-def _bar(Lx, Ly, p, mat, force, support="xmin", load="xmax"):
+def _bar(Lx, Ly, p, mat, force, support="xmin", load="xmax", refine=1):
     frame = Frame(0.0, 0.0, 0.0, p)
     H, W = int(round(Ly / p)), int(round(Lx / p))
     mask = np.ones((H, W), bool)
     g = box(0, 0, Lx, Ly)
     loads = LoadSpec([Region(side=support, width=1e-3)],
                      [Load2D(Region(side=load, width=1e-3), force)]).resolve(g.bounds)
-    return FEAProblem(mask, frame, 1.0, mat, loads, 1.0), H, W
+    return FEAProblem(mask, frame, 1.0, mat, loads, 1.0, refine=refine), H, W
+
+
+def _cantilever_tip(refine):
+    E, nu, P = 1000.0, 0.3, -1.0
+    Lx, Ly, p = 40.0, 4.0, 0.5
+    fp, H, W = _bar(Lx, Ly, p, isotropic(E, nu), (0.0, P), refine=refine)
+    r = fp.solve(np.full(H * W, 0.5), direct=True)
+    I = Ly ** 3 / 12
+    G = E / (2 * (1 + nu))
+    delta = P * Lx ** 3 / (3 * E * I) + P * Lx / (5 / 6 * G * Ly)
+    j = fp.used_nodes % (fp.Wr + 1)
+    return r.u[1::2][j == fp.Wr].mean(), delta
+
+
+def test_refined_mesh_is_closer_to_beam_theory():
+    """Bilinear quads are too stiff in bending; splitting each cell into r x r elements
+    converges the cantilever's tip deflection toward Timoshenko beam theory (the last
+    ~0.3% is the clamped root, which beam theory ignores). Also guards the solver's
+    floating-island regularization, which used to stiffen fine meshes."""
+    errs = []
+    for rf in (1, 2, 3, 4):
+        tip, delta = _cantilever_tip(rf)
+        errs.append(abs(tip / delta - 1))
+    assert errs[3] < errs[2] < errs[1] < 0.6 * errs[0]
+    assert errs[3] < 0.005
+
+
+def test_refined_mesh_keeps_cell_outputs():
+    """Uniform tension: every element sees the same stress, so per-cell FI, stresses and
+    FI_agg match the one-element-per-cell mesh; outputs stay one value per cell."""
+    mat = isotropic(1000.0, 0.3)
+    a, H, W = _bar(20.0, 4.0, 0.5, mat, (50.0, 0.0))
+    b, _, _ = _bar(20.0, 4.0, 0.5, mat, (50.0, 0.0), refine=2)
+    wh = np.full(H * W, 0.5)
+    ra, rb = a.solve(wh, direct=True), b.solve(wh, direct=True)
+    assert rb.fi.shape == ra.fi.shape == (H * W,) and rb.N == ra.N == H * W
+    mid = (slice(None), slice(W // 4, 3 * W // 4))
+    assert np.allclose(rb.sx.reshape(H, W)[mid], ra.sx.reshape(H, W)[mid], rtol=0.02)
+    assert rb.fi_agg(8) == pytest.approx(ra.fi_agg(8), rel=0.1)
+    assert b.support_map().shape == (H * W,) and b.support_map().sum() == a.support_map().sum()
 
 
 def test_tension_bar_matches_analytic():

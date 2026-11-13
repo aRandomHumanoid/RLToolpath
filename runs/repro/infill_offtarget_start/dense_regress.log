@@ -1,0 +1,43 @@
+[rltp] sliced 10 layers, grid 77x102 at p=0.4 mm, 29420 cells (0.6s)
+[rltp] iter 200 evals 200 total -1.8404 temp 0.100
+[rltp] pass 0: gain 0.1286 accepted 134/320 total -1.8069 best -1.8069 temp 0.100 drift 1.93e-12
+[rltp] iter 400 evals 400 total -1.7960 temp 0.075
+[rltp] iter 600 evals 600 total -1.7348 temp 0.075
+[rltp] pass 1: gain 0.0837 accepted 118/320 total -1.7232 best -1.7232 temp 0.075 drift 1.21e-12
+[rltp] iter 800 evals 800 total -1.7151 temp 0.050
+[rltp] pass 2: gain 0.0172 accepted 74/320 total -1.7060 best -1.7060 temp 0.050 drift 7.03e-13
+[rltp] iter 1000 evals 1000 total -1.7020 temp 0.025
+[rltp] iter 1200 evals 1200 total -1.6861 temp 0.025
+[rltp] pass 3: gain 0.0293 accepted 84/320 total -1.6767 best -1.6767 temp 0.025 drift 1.51e-12
+[rltp] iter 1400 evals 1400 total -1.6694 temp 0.000
+[rltp] iter 1600 evals 1600 total -1.6683 temp 0.000
+[rltp] pass 4: gain 0.0084 accepted 4/320 total -1.6683 best -1.6683 temp 0.000 drift 6.57e-14
+[rltp] iter 1800 evals 1800 total -1.6548 temp 0.000
+[rltp] pass 5: gain 0.0155 accepted 12/320 total -1.6527 best -1.6527 temp 0.000 drift 1.22e-12
+[rltp] iter 2000 evals 2000 total -1.6491 temp 0.000
+[rltp] iter 2200 evals 2200 total -1.6437 temp 0.000
+[rltp] pass 6: gain 0.0103 accepted 9/320 total -1.6424 best -1.6424 temp 0.000 drift 2.05e-12
+[rltp] iter 2400 evals 2400 total -1.6385 temp 0.000
+[rltp] pass 7: gain 0.0151 accepted 8/320 total -1.6273 best -1.6273 temp 0.000 drift 1.60e-12
+[rltp] iter 2600 evals 2600 total -1.6271 temp 0.000
+[rltp] iter 2800 evals 2800 total -1.6200 temp 0.000
+[rltp] pass 8: gain 0.0074 accepted 10/320 total -1.6200 best -1.6200 temp 0.000 drift 1.50e-13
+[rltp] iter 3000 evals 3000 total -1.6157 temp 0.000
+[rltp] iter 3200 evals 3200 total -1.6122 temp 0.000
+[rltp] pass 9: gain 0.0077 accepted 7/320 total -1.6122 best -1.6122 temp 0.000 drift 1.10e-12
+[rltp] iter 3400 evals 3400 total -1.6099 temp 0.000
+[rltp] pass 10: gain 0.0023 accepted 8/320 total -1.6099 best -1.6099 temp 0.000 drift 3.64e-13
+[rltp] iter 3600 evals 3600 total -1.6096 temp 0.000
+[rltp] iter 3800 evals 3800 total -1.5971 temp 0.000
+[rltp] pass 11: gain 0.0205 accepted 9/320 total -1.5895 best -1.5895 temp 0.000 drift 6.39e-13
+[rltp] iter 4000 evals 4000 total -1.5895 temp 0.000
+[rltp] pass 12: gain 0.0000 accepted 0/160 total -1.5895 best -1.5895 temp 0.000 drift 0.00e+00
+[rltp] wrote runs/repro/infill/dense_regress/part.gcode, viewer.html, history.jsonl, metrics.json (0.1s)
+[rltp] sa: 4000 evals, 13 passes, stop=max_evals, 84.0s
+[rltp]   fi_agg              0.879 ->     0.8224
+[rltp]   inter_fi_agg            0 ->          0
+[rltp]   time_s              365.7 ->      371.4
+[rltp]   strokes               120 ->         98
+[rltp]   travel_mm             704 ->      342.4
+[rltp]   boundary_ends         240 ->        159
+[rltp]   cells           2.942e+04 ->  2.942e+04

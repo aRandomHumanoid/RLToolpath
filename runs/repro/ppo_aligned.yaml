@@ -1,0 +1,15 @@
+# PPO fine-tune on the aligned env (accept: improve, norm: relative - both defaults),
+# from the stage-1 imitation checkpoint, with the original s1_cpu PPO settings and seed.
+seed: 1
+threads: 8
+holdout_families: [ribs]
+init: runs/s1_cpu/s1_strength/policy_bc.pt
+env: {p: 0.4, episode_len: 64}
+ppo: {num_envs: 16, num_steps: 64, minibatch_size: 128, epochs: 4, lr: 1.0e-4, ent_coef: 0.003,
+      target_kl: 0.03, save_every: 5, image_every: 10}
+stages:
+  - name: s1_strength
+    grid: 32
+    terms: [strength]
+    ops: [flip_right, flip_down, patch5_0, patch5_90, patch9_0, patch9_90]
+    ppo: {total_steps: 150000}

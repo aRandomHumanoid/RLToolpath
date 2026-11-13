@@ -163,12 +163,12 @@ const RLTP = (function () {
     for (let i = 0; i < r.length; i += 2) for (let q = 0; q < r[i + 1]; q++) out[j++] = r[i] + q;
     return out;
   }
-  /* direction codes: 0 none, 1 +1, 2 +W, 3 -1, 4 -W */
+  /* direction codes: 0 none, 1 +1, 2 +W, 3 -1, 4 -W, 5 empty (sparse layers: not printed) */
   function applyCodes(nxt, cells, codes, W) {
     const off = [0, 1, W, -1, -W];
     for (let i = 0; i < cells.length; i++) {
       const c = codes.charCodeAt(i) - 48;
-      nxt[cells[i]] = c > 0 ? cells[i] + off[c] : -1;
+      nxt[cells[i]] = c === 5 ? -2 : c > 0 ? cells[i] + off[c] : -1;
     }
   }
   /* strokes from nxt: heads (no predecessor) first, then loops from their seam, then any other loop */
@@ -176,6 +176,7 @@ const RLTP = (function () {
     const prv = new Int32Array(n).fill(-1);
     for (let i = 0; i < cells.length; i++) { const a = cells[i], b = nxt[a]; if (b >= 0) prv[b] = a; }
     const seen = new Uint8Array(n), strokes = [];
+    for (let i = 0; i < cells.length; i++) if (nxt[cells[i]] === -2) seen[cells[i]] = 1;   // empty cells
     function run(st, head) {
       const c = [];
       let x = st;
@@ -426,7 +427,8 @@ if (typeof document !== "undefined") (function () {
   function dot(path, x, y, r) { path.moveTo(x + r, y); path.arc(x, y, r, 0, Math.PI * 2); }
 
   function drawCover(G, cov, o) {
-    const lw = Math.max(1, Math.min(G.p * V.sc * 0.62, 18));
+    const kb = G.d.k || 1;   // fine bead grid: a bead spans kb cells
+    const lw = Math.max(1, Math.min(G.p * kb * V.sc * 0.62, 18 * kb));
     const buckets = new Map(), tr = new Path2D(), seams = new Path2D(), ends = new Path2D(), singles = [];
     const strokes = cov.strokes, nS = strokes.length, upto = o.upto, timed = !!o.ts;
     const rs = Math.max(2.5, lw * 0.42), re = Math.max(1.6, lw * 0.26);

@@ -73,6 +73,20 @@ class Layer:
     seam: set = field(default_factory=set)   # one cell per closed loop: where it starts and ends
     poly: Any = None         # shapely geometry of the exact slice outline (world)
     first: bool = False      # first layer (slower speed)
+    # Sparse layers (walls + solid skins + optional infill). `mask` is then the set of
+    # FILLED cells, which edits may change; `part` is the fixed in-part geometry,
+    # `req` the cells that must stay filled (walls and solid skins) and `lock` the wall
+    # cells, whose links never change. All None for a fully filled layer (mask == part).
+    part: np.ndarray | None = None   # bool (H, W)
+    req: np.ndarray | None = None    # bool (H, W)
+    lock: np.ndarray | None = None   # bool (H, W)
+    ctx: dict | None = None          # support context from the neighbour layers (PartState)
+    # Fine bead grid (rltp.cover.beads): kb cells per bead width. `mask` then holds bead
+    # centerline nodes, material is derived from their footprints, `frame` is the path
+    # frame (bead centres) and `mframe` the material grid's frame.
+    kb: int = 1                      # cells per bead width (1 = one cell per bead)
+    mframe: Frame | None = None
+    aux: dict | None = None          # fine layers: node regions
     _cache: dict = field(default_factory=dict, repr=False, compare=False)
 
     @property
@@ -91,9 +105,44 @@ class Layer:
     def flat_mask(self) -> np.ndarray:
         return self.mask.reshape(-1)
 
+    @property
+    def sparse(self) -> bool:
+        return self.part is not None
+
+    @property
+    def part_mask(self) -> np.ndarray:
+        """In-part geometry (bool H x W): `part` for a sparse layer, else `mask`."""
+        return self.mask if self.part is None else self.part
+
+    @property
+    def material_frame(self) -> Frame:
+        return self.mframe if self.mframe is not None else self.frame
+
+    @property
+    def density(self) -> np.ndarray:
+        """Material per cell (H x W float): the filled mask, or for a fine layer the bead
+        footprints' extrusion (1 inside a bead, 2 under two)."""
+        if self.kb == 1:
+            return self.mask.astype(float)
+        from rltp.cover.beads import density
+        return density(self)
+
+    @property
+    def material(self) -> np.ndarray:
+        """Filled cells (bool H x W): `mask`, or density >= 0.5 for a fine layer."""
+        if self.kb == 1:
+            return self.mask
+        m = self._cache.get("material")
+        if m is None:
+            m = self.density >= 0.5
+            self._cache["material"] = m
+        return m
+
     def copy(self) -> "Layer":
-        return Layer(self.k, self.z, self.h, self.mask, self.frame,
-                     self.nxt.copy(), self.prv.copy(), set(self.seam), self.poly, self.first)
+        return Layer(self.k, self.z, self.h, self.mask if self.part is None else self.mask.copy(),
+                     self.frame, self.nxt.copy(), self.prv.copy(), set(self.seam), self.poly,
+                     self.first, self.part, self.req, self.lock, self.ctx, self.kb, self.mframe,
+                     self.aux)
 
     def invalidate(self) -> None:
         self._cache.clear()

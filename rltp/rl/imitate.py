@@ -14,7 +14,7 @@ import time
 
 import numpy as np
 
-from rltp.cover.ops import N_OPS, sample_valid
+from rltp.cover.ops import N_PATH_OPS as N_OPS, sample_valid
 
 log = logging.getLogger(__name__)
 
@@ -24,10 +24,16 @@ def _teacher_worker(args):
     from rltp.rl.env import LayerEnv
     env = LayerEnv(**env_kwargs)
     rng = np.random.default_rng(seed)
+    if env.norm_mode == "std":
+        # without this the first states are scored against near-zero running scales
+        # (one such state had a best-of-N gain of ~1e4 edit stds)
+        env.reset(seed=seed)
+        env.warmup_norm(64)
     obs_l, mask_l, lab_l, cand_l, gain_l = [], [], [], [], []
     ep = 0
     while len(lab_l) < n_states:
         env.reset(seed=int(rng.integers(2**31)))
+        unit = env.edit_scale(rng=rng)      # temperatures are in typical-edit units
         ep += 1
         # sample a few states along an annealing run
         stops = sorted(rng.choice(np.arange(sa_steps + 1), size=min(4, sa_steps + 1), replace=False).tolist())
@@ -37,9 +43,9 @@ def _teacher_worker(args):
                 M = env.action_masks()
                 a = int(sample_valid(M.reshape(N_OPS, -1), rng)[0])
                 g = env.score_actions([a])[0]
-                temp = temp0 * (1 - step / max(sa_steps, 1))
+                temp = temp0 * unit * (1 - step / max(sa_steps, 1))
                 if g > 0 or (temp > 0 and rng.random() < math.exp(max(g / temp, -50))):
-                    env.step(a)
+                    env.commit_action(a)
                 step += 1
             M = env.action_masks()
             cands = np.unique(sample_valid(M.reshape(N_OPS, -1), rng, n_cand))

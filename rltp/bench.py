@@ -20,8 +20,24 @@ def _shape_part(env_kwargs, seed):
     return env
 
 
+def pct_change(raw0: dict, raw1: dict, terms) -> dict:
+    """Physical change of each enabled term, in percent (negative = smaller FI / time / cost).
+    strength and inter are -log FI_agg; time and cont are minus a time and a cost."""
+    out = {}
+    for t in terms:
+        a, b = float(raw0[t]), float(raw1[t])
+        if t in ("strength", "inter"):
+            out[t] = 100.0 * (np.exp(-(b - a)) - 1.0)
+        elif a != 0:
+            out[t] = 100.0 * (b / a - 1.0)
+    return out
+
+
+TERM_LABEL = {"strength": "FI_agg", "time": "time", "cont": "cont cost", "inter": "inter FI"}
+
+
 def _run_one(job):
-    env_kwargs, seed, proposer_name, policy, budget, w, norm_state, run_seed = job
+    env_kwargs, seed, proposer_name, policy, budget, w, norm_state, run_seed, persist = job
     try:
         import torch
         torch.set_num_threads(1)
@@ -39,10 +55,12 @@ def _run_one(job):
     prop = make_proposer(proposer_name, policy)
     burst = 32
     cfg = LoopConfig(burst=burst, anneal_passes=max(1, int(0.6 * budget / burst)), eps=-np.inf,
-                     max_passes=10 ** 6, max_evals=budget, warmup=0, seed=run_seed)
+                     max_passes=10 ** 6, max_evals=budget, warmup=0, seed=run_seed, persist_bans=persist)
     start = part.total(w)
+    raw0 = part.raw()
     hist = History(None)
     optimize_part(part, prop, w, cfg, hist)
+    raw1 = part.raw()                    # the loop leaves the part at the best state seen
     xs = np.arange(0, budget + 1)
     best = np.full(budget + 1, np.nan)
     best[0] = 0.0
@@ -56,7 +74,8 @@ def _run_one(job):
     best = np.fmax.accumulate(np.nan_to_num(best, nan=-np.inf))
     best[np.isinf(best)] = 0.0
     return {"seed": seed, "proposer": proposer_name, "run_seed": run_seed, "family": env.shape_family,
-            "start": start, "final_gain": float(best[-1]), "curve": best[xs].tolist()}
+            "start": start, "final_gain": float(best[-1]), "curve": best[xs].tolist(),
+            "raw0": raw0, "raw1": raw1, "pct": pct_change(raw0, raw1, env.terms)}
 
 
 def run_bench(args, progress=print) -> dict:
@@ -66,7 +85,9 @@ def run_bench(args, progress=print) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     terms = tuple(t.strip() for t in args.terms.split(","))
     fams = tuple(f.strip() for f in args.families.split(","))
-    env_kwargs = {"grid": args.grid, "terms": terms, "families": fams}
+    env_kwargs = {"grid": args.grid, "terms": terms, "families": fams,
+                  "norm": getattr(args, "norm", "relative")}
+    persist = not getattr(args, "burst_bans", False)
     w = None if args.weights is None else parse_weights(args.weights).tolist()
     props = [p.strip() for p in args.proposers.split(",") if p.strip()]
     if not args.policy:
@@ -83,7 +104,7 @@ def run_bench(args, progress=print) -> dict:
         ns = env.part.norm.state()
         for pn in props:
             for rs in range(args.seeds):
-                jobs.append((env_kwargs, seed, pn, args.policy, args.budget, w, ns, rs))
+                jobs.append((env_kwargs, seed, pn, args.policy, args.budget, w, ns, rs, persist))
     progress(f"bench: {args.shapes} shapes x {len(props)} proposers x {args.seeds} seeds, "
              f"budget {args.budget} evals, families {fams}, terms {terms}")
     if args.workers > 1:
@@ -93,11 +114,16 @@ def run_bench(args, progress=print) -> dict:
         res = [_run_one(j) for j in jobs]
     summary = {}
     for pn in props:
-        curves = np.array([r["curve"] for r in res if r["proposer"] == pn])
+        mine = [r for r in res if r["proposer"] == pn]
+        curves = np.array([r["curve"] for r in mine])
+        pct = {t: float(np.mean([r["pct"][t] for r in mine if t in r["pct"]]))
+               for t in terms if any(t in r["pct"] for r in mine)}
         summary[pn] = {"mean_final_gain": float(curves[:, -1].mean()),
                        "std_final_gain": float(curves[:, -1].std()),
+                       "mean_pct_change": pct,
                        "mean_curve": curves.mean(0).tolist()}
-        progress(f"  {pn:8s} mean gain {curves[:, -1].mean():.3f} +- {curves[:, -1].std():.3f}")
+        changes = "  ".join(f"{TERM_LABEL.get(t, t)} {v:+.1f}%" for t, v in pct.items())
+        progress(f"  {pn:13s} mean gain {curves[:, -1].mean():.4f} +- {curves[:, -1].std():.4f}   {changes}")
     # evals to reach SA's final score
     if "sa" in summary:
         target = summary["sa"]["mean_final_gain"]

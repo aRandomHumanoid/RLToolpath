@@ -99,15 +99,17 @@ def nx_codes(cells: np.ndarray, nxt_vals: np.ndarray, W: int) -> str:
     code[d == W] = 2      # after +-1 so a 1-wide grid reads as vertical
     code[d == -W] = 4
     code[nv < 0] = 0
+    code[nv == -2] = 5    # an empty cell of a sparse layer
     return (code + 48).tobytes().decode("ascii")
 
 
 def nx_decode(codes: str, cells: np.ndarray, W: int, n: int) -> np.ndarray:
-    off = np.array([0, 1, W, -1, -W])
+    off = np.array([0, 1, W, -1, -W, 0])
     c = np.frombuffer(codes.encode("ascii"), np.uint8).astype(np.int64) - 48
     nxt = np.full(n, -1, np.int64)
-    has = c > 0
+    has = (c > 0) & (c < 5)
     nxt[cells[has]] = cells[has] + off[c[has]]
+    nxt[cells[c == 5]] = -2
     return nxt
 
 
@@ -118,8 +120,16 @@ def _r(x, nd=4):
 
 # ------------------------------------------------------------------ builders
 
+def _viewer_nxt(L) -> np.ndarray:
+    """nxt with -2 at a sparse layer's empty in-part cells (they show as background)."""
+    nxt = L.nxt.astype(np.int64)
+    if L.sparse:
+        nxt[L.part.reshape(-1) & ~L.flat_mask] = -2
+    return nxt
+
+
 def _layer_data(L, ev) -> dict:
-    cells = np.flatnonzero(L.flat_mask)
+    cells = np.flatnonzero(L.part_mask.reshape(-1))
     pc = get_pieces(L)
     tm = ev.timing
     T = float(tm.T)
@@ -129,8 +139,8 @@ def _layer_data(L, ev) -> dict:
         "k": int(L.k), "z": _r(L.z), "h": _r(L.h), "H": int(L.H), "W": int(L.W),
         "f": [_r(L.frame.ox, 6), _r(L.frame.oy, 6), _r(L.frame.theta, 8), _r(L.frame.p, 6)],
         "T": _r(T, 4),
-        "rle": rle(L.flat_mask),
-        "nx": nx_codes(cells, L.nxt[cells], L.W),
+        "rle": rle(L.part_mask.reshape(-1)),
+        "nx": nx_codes(cells, _viewer_nxt(L)[cells], L.W),
         "seam": sorted(int(s) for s in L.seam),
         "t": b64_u16(tm.t_cell[cells], T),
         "fi": b64_u16(fi, fimax) if fimax > 0 else None,
@@ -139,7 +149,8 @@ def _layer_data(L, ev) -> dict:
         "ts": [_r(x, 3) for x in tm.stroke_start],
         "te": [_r(x, 3) for x in tm.stroke_start + tm.stroke_time],
         "n_strokes": int(pc.count),
-        "n_cells": int(cells.size),
+        "n_cells": int(L.material.sum()),
+        "k": int(L.kb),
     }
 
 
@@ -156,7 +167,7 @@ def _hist_data(events: list[dict], layers, cap_points: int = 4000) -> dict | Non
         return None
     ops = list(OPS)
     op_idx = {o: i for i, o in enumerate(ops)}
-    cells_of = {k: np.flatnonzero(L.flat_mask) for k, L in enumerate(layers)}
+    cells_of = {k: np.flatnonzero(L.part_mask.reshape(-1)) for k, L in enumerate(layers)}
     Ws = [L.W for L in layers]
 
     n = max(int(e["iter"]) for e in edits) + 1
@@ -292,13 +303,13 @@ def replay_viewer_layer(data: dict, k: int, s: int) -> tuple[np.ndarray, set]:
     applied, nx, seam = best
     nxt = nx_decode(nx, cells, W, n)
     seams = set(seam)
-    off = np.array([0, 1, W, -1, -W])
+    off = np.array([0, 1, W, -1, -W, 0])
     for it, runs, codes, sadd, sdel in h["diffs"]:
         if it < applied or it >= s or h["layer"][it] != k:
             continue
         dc = cells[unrle(runs)]
         c = np.frombuffer(codes.encode("ascii"), np.uint8).astype(np.int64) - 48
-        nxt[dc] = np.where(c > 0, dc + off[c], -1)
+        nxt[dc] = np.where(c == 5, -2, np.where(c > 0, dc + off[c], -1))
         seams -= set(sdel)
         seams |= set(sadd)
     return nxt, seams

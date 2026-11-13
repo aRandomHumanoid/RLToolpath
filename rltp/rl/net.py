@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from rltp.cover.ops import N_OPS
+from rltp.cover.ops import N_OPS as N_ALL_OPS, N_PATH_OPS as N_OPS
 from rltp.rl.obs import N_CH, build_obs
 from rltp.search.sa import Proposer
 
@@ -102,8 +102,8 @@ class PolicyProposer(Proposer):
         self.model = model
         self.sample = sample
         self.device = device
-        self.op_keep = np.zeros(N_OPS, bool)
-        self.op_keep[ops_to_indices(ops)] = True   # never propose operators it was not trained on
+        self.op_keep = np.zeros(N_ALL_OPS, bool)
+        self.op_keep[[i for i in ops_to_indices(ops) if i < N_OPS]] = True   # only what it was trained on
         if sample:
             self.name = "policy-sample"
 
@@ -118,7 +118,9 @@ class PolicyProposer(Proposer):
         obs = build_obs(part, k, w)
         x = torch.from_numpy(obs[None]).to(self.device)
         logits, _ = self.model(x)
-        lg = logits.reshape(N_OPS, -1).cpu().numpy().astype(np.float64)
+        lg_path = logits.reshape(N_OPS, -1).cpu().numpy().astype(np.float64)
+        lg = np.full((N_ALL_OPS, lg_path.shape[1]), -np.inf)   # fill edits: not in its action space
+        lg[:N_OPS] = lg_path
         lg[~self.op_keep] = -np.inf
         lg = lg.reshape(-1)
         lg[~M] = -np.inf

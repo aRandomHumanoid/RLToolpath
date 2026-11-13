@@ -158,7 +158,7 @@ def save_toolpath_image(snap: dict, path: Path, title: str = "") -> None:
 def train_ppo(model, env_kwargs: dict, cfg: PPOConfig, out_dir, progress=None) -> dict:
     import torch
     from torch.distributions import Categorical
-    from rltp.cover.ops import N_OPS
+    from rltp.cover.ops import N_PATH_OPS as N_OPS
     from rltp.rl.net import masked_logits, save_policy
 
     out = Path(out_dir)

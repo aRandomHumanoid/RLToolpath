@@ -1,0 +1,33 @@
+[rltp] sliced 10 layers, grid 302x402 at p=0.1 mm, 388350 cells (370.8s)
+[rltp] gradient start: FI_agg 0.8794 against 0.9581 for the stress start; best of 8 starts by score: stress (field model 0.9532 -> 0.8649, rounded 0.8783); starts within 4.5% after rounding; 369s
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 388350 of 470720 cells filled, infill 39.7% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] 4 annealing chains from 2 start(s), 4 processes
+[rltp] chain 1: iter 200 evals 200 total -2.6259 temp 0.100
+[rltp] chain 3: iter 200 evals 200 total -2.5794 temp 0.100
+[rltp] chain 2: iter 200 evals 200 total -2.4221 temp 0.100
+[rltp] chain 0: iter 200 evals 200 total -2.3955 temp 0.100
+[rltp] chain 1: pass 0: gain 0.0681 accepted 88/302 total -2.5799 best -2.5799 temp 0.100 drift 1.07e-10
+[rltp] chain 2: pass 0: gain -0.0042 accepted 78/298 total -2.4036 best -2.4036 temp 0.100 drift 1.87e-10
+[rltp] chain 3: pass 0: gain 0.1418 accepted 83/293 total -2.5019 best -2.5019 temp 0.100 drift 4.48e-10
+[rltp] chain 0: pass 0: gain 0.0117 accepted 90/301 total -2.3919 best -2.3919 temp 0.100 drift 2.28e-10
+[rltp] chain 1: iter 400 evals 400 total -2.5686 temp 0.075
+[rltp] chain 2: iter 400 evals 400 total -2.3885 temp 0.075
+[rltp] chain 3: iter 400 evals 400 total -2.4986 temp 0.075
+[rltp] chain 0: iter 400 evals 400 total -2.3927 temp 0.075
+[rltp] chain 1: iter 600 evals 600 total -2.5617 temp 0.075
+[rltp] chain 1: pass 1: gain 0.0140 accepted 90/305 total -2.5639 best -2.5639 temp 0.075 drift 1.63e-10
+[rltp] chain 2: pass 1: gain 0.0096 accepted 76/298 total -2.3932 best -2.3932 temp 0.075 drift 2.01e-10
+[rltp] chain 2: iter 600 evals 600 total -2.3933 temp 0.050
+[rltp] chain 0: iter 600 evals 600 total -2.3775 temp 0.075
+[rltp] chain 0: pass 1: gain 0.0102 accepted 80/300 total -2.3776 best -2.3776 temp 0.075 drift 3.84e-10
+[rltp] chain 3: pass 1: gain 0.0303 accepted 84/305 total -2.4696 best -2.4696 temp 0.075 drift 5.29e-11
+[rltp] chain 3: iter 600 evals 600 total -2.4696 temp 0.050
+[rltp] chain 1: iter 800 evals 800 total -2.5626 temp 0.050
+[rltp] chain 0: iter 800 evals 800 total -2.3644 temp 0.050
+[rltp] chain 3: iter 800 evals 800 total -2.4570 temp 0.050
+[rltp] chain 2: iter 800 evals 800 total -2.3939 temp 0.050
+[rltp] chain 1: pass 2: gain 0.0048 accepted 74/302 total -2.5589 best -2.5589 temp 0.050 drift 5.41e-11
+[rltp] chain 3: pass 2: gain 0.0120 accepted 80/310 total -2.4569 best -2.4569 temp 0.050 drift 2.89e-10
+[rltp] chain 0: pass 2: gain 0.0127 accepted 70/306 total -2.3638 best -2.3638 temp 0.050 drift 2.31e-11
+[rltp] chain 2: pass 2: gain -0.0032 accepted 50/298 total -2.3956 best -2.3932 temp 0.050 drift 6.46e-11
+[rltp] chain 1: iter 1000 evals 1000 total -2.5530 temp 0.025

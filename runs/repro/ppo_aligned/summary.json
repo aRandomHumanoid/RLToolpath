@@ -1,0 +1,69 @@
+{
+ "stages": [
+  {
+   "name": "s1_strength",
+   "env": {
+    "p": 0.4,
+    "episode_len": 64,
+    "grid": 32,
+    "terms": [
+     "strength"
+    ],
+    "ops": [
+     "flip_right",
+     "flip_down",
+     "patch5_0",
+     "patch5_90",
+     "patch9_0",
+     "patch9_90"
+    ],
+    "families": [
+     "star",
+     "blobs",
+     "plate_holes",
+     "bracket"
+    ]
+   },
+   "ppo": {
+    "updates": 146,
+    "steps": 149504,
+    "last": {
+     "update": 146,
+     "step": 149504,
+     "sps": 87.8,
+     "ep_return": 0.14555556849684967,
+     "episodes": 2336,
+     "lr": 6.849315068493179e-07,
+     "early_stop": false,
+     "pg": -0.0010037685788120143,
+     "vf": 0.02173318283894332,
+     "ent": 7.026989847421646,
+     "kl": 3.095545980613679e-05,
+     "clipfrac": 0.0
+    },
+    "config": {
+     "total_steps": 150000,
+     "num_envs": 16,
+     "num_steps": 64,
+     "lr": 0.0001,
+     "anneal_lr": true,
+     "gamma": 0.97,
+     "gae_lambda": 0.95,
+     "epochs": 4,
+     "minibatch_size": 128,
+     "clip": 0.2,
+     "ent_coef": 0.003,
+     "vf_coef": 0.5,
+     "max_grad_norm": 0.5,
+     "target_kl": 0.03,
+     "norm_reward": true,
+     "save_every": 5,
+     "image_every": 10,
+     "threads": 0,
+     "seed": 1
+    }
+   },
+   "seconds": 1704.5317826271057
+  }
+ ]
+}
