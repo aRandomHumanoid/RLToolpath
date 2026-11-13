@@ -369,9 +369,9 @@ def build_parser() -> argparse.ArgumentParser:
     o.add_argument("--chains", type=int, default=1, metavar="N",
                    help="run N independent annealing chains (seeds seed..seed+N-1; with a gradient start, "
                         "from the best field starts in turn) and keep the best final layout")
-    o.add_argument("--chain-starts", type=int, default=2, metavar="K",
-                   help="gradient start: chains start from the K best field starts in turn (default 2; "
-                        "finals follow the start's rank, so weaker starts mostly waste chains)")
+    o.add_argument("--chain-starts", type=int, default=1, metavar="K",
+                   help="gradient start: chains start from the K best field starts in turn (default 1: on "
+                        "the bracket, chains from the second-best start ended 5-10 points behind)")
     o.add_argument("--reheat", type=float, default=0.0, metavar="F",
                    help="once greedy passes stall (two in a row gaining under 0.005), anneal again from "
                         "F x the starting temperature (0 = off)")

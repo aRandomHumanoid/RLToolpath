@@ -139,7 +139,9 @@ evaluator, with simulated annealing by default. The RL policy is frozen: it stil
 0.4 mm grid (`--proposer policy`, `rltp train`, `rltp bench`) but isn't retrained or
 extended. Next come a gradient layout step for strength (built: `--start gradient`; see the
 results below), parallel chains (independent chains built: `--chains`), cheap screening and
-learning within the run; see the design doc's Search against the evaluator.
+learning within the run; see the design doc's Search against the evaluator. On the 0.1 mm
+bracket, `--start gradient --chains 4` with D's guidance reaches +56.5 against D's +43.3,
+better on every term; one part so far.
 
 Implemented: v0 (single nozzle, 4-neighbour grid; strength, time, continuity),
 v0.5 (per-layer grid rotation), v1.5 (interlayer term from interface statics),
@@ -260,7 +262,7 @@ Interpretation choices worth knowing:
   boundaries) at the run's continuity and time weights (`--field-end-cost X` scales the
   fitted price, default 1; 0 ignores line ends). It lays every start out and
   ranks them by the whole score. `--chains N` runs N annealing chains in parallel (seeds
-  seed..seed+N−1, from the `--chain-starts` best field starts in turn, default 2) and keeps
+  seed..seed+N−1, from the `--chain-starts` best field starts in turn, default 1) and keeps
   the best; each chain's history and metrics go to `out/chain<i>/`. `--reheat F` anneals
   again from F × the starting temperature once greedy passes stall. `--workers` caps the
   processes; set `OMP_NUM_THREADS=1`. Parallel work needs fork (Linux, WSL); elsewhere the
@@ -524,7 +526,7 @@ D's guidance, 4 chains × 4,000 evals per run).** The field step now runs from 8
 direction fields (the stress map, turned 90°, uniform 0/90/45/135, 2 random smooth fields),
 each through three stages (filter 1.9 → 1.2 → 0.75 mm, p 2 → 4 → 8), and ranks the laid-out
 starts by the whole score. Here chain i started from the i-th best start (the default is now
-the 2 best in turn).
+the best start only, `--chain-starts 1`).
 
 | run | start objective | chain finals | best | in-plane FI_agg of the best | continuity cost |
 | --- | --- | --- | --- | --- | --- |
@@ -565,7 +567,28 @@ the 2 best in turn).
 
   The start alone beats D's and S's finals (+43.3, +44.0): 10% stronger in-plane than the
   slicer start, faster than every other start, and fewer strokes than the stress start (142).
-  Annealing from it is running.
+
+**Annealing from the corrected gradient start (same setup and objective, D's guidance, 4
+chains × 4,000 evals; chains 0 and 2 from the best field start, 1 and 3 from the second).**
+
+| run | start objective | chain finals | best | in-plane FI_agg | Z FI | print time | continuity cost | strokes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| S: stress start | +11.2 | +40.8, +44.0, +42.6, +38.6 | +44.0 | 0.951 (−3.7%) | 4.31 | 343.9 s | 194 | 126 |
+| K05: gradient, ½× line-end cost | +47.3 | +56.5, +45.1, +55.9, +49.3 | **+56.5** | 0.890 (−9.9%) | 3.89 | 338.9 s | 184 | 121 |
+| K1: gradient, 1× (default) | +47.3 | +55.3, +48.2, +51.5, +49.3 | +55.3 | 0.902 (−8.7%) | 3.95 | 337.2 s | 185 | 113 |
+
+(FI_agg, Z FI, time, continuity cost and strokes are the best chain's.)
+
+- **The design doc's first exit is met on the bracket**: +56.5 against D's +43.3 with less
+  continuity cost (184 against 199). Against S's best, the best part is better on every
+  term at once: in-plane FI_agg 9.9% below the slicer start against 3.7% (D: 2.8%), lower
+  Z FI, 5 s faster, fewer strokes, and fewer coverage gaps and less over-extrusion.
+- **Every one of the 8 chains beats S's best** (+44.0).
+- **Chains from the second-best field start end 5–10 points behind** those from the best,
+  as in H, so all chains now start from the best (`--chain-starts 1`).
+- ½× and 1× differ by less than the seed spread; 1× stays the default.
+- About 32 minutes per chain with 8 processes running, plus 6 minutes for the field step.
+- **One part so far**, and the line-end price was fitted on it; a second part comes next.
 
 **Holding an infill target: rule or weight? (bracket, target 40% = remove 60%, SA, 4,000
 evals, weights 0.5/1/1/0, 6 seeds.)** The objective is 0.5 × strength + time + continuity,

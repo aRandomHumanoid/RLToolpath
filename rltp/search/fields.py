@@ -326,7 +326,7 @@ class FieldOptions:
     continuation: bool = True    # wide filter and low exponent first (stages_for)
     sigma_mm: float = 0.75       # final filter
     iters: int = 60              # iterations of the final stage (earlier stages get a third each)
-    keep: int = 2                # best starts laid out; annealing chains start from them in turn
+    keep: int = 1                # best starts laid out; annealing chains start from them in turn
     weights: tuple | None = None  # score weights: rank the laid-out starts by the whole score
                                   # (starts as strong can differ a lot on continuity), and charge
                                   # line ends in the field step; None: by FI_agg after rounding, no
