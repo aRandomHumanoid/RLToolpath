@@ -469,7 +469,12 @@ class FEAProblem:
         s0 = eps @ self.Q0.T
         s90 = eps @ self.Q90.T
         out = []
+        seen: dict = {}            # layers passing the very same inputs (identical layouts) share a result
         for whc, filc, N, pr in zip(whcs, filcs, Ns, pairs):
+            key = (id(whc), id(filc), id(pr), int(N))
+            if key in seen:
+                out.append(seen[key])
+                continue
             rows = pr["rows"]
             fic = np.empty((rows.size, C))
             fic[pr["s_idx"]] = tab[pr["s_slot"]]
@@ -499,8 +504,10 @@ class FEAProblem:
             sm = (w * s0[:, 0] + (1 - w) * s90[:, 0]) * filc[:, None]
             sx, sy, txy = np.zeros(n), np.zeros(n), np.zeros(n)
             sx[self.cells], sy[self.cells], txy[self.cells] = sm[:, 0], sm[:, 1], sm[:, 2]
-            out.append(FEAResult(u, fi, float(m.sum()), int(N), sx, sy, txy, iters, direct, S_pc=S_pc,
-                                 comp=comp, S_p2=S_p2, S_pc2=S_pc2))
+            r = FEAResult(u, fi, float(m.sum()), int(N), sx, sy, txy, iters, direct, S_pc=S_pc,
+                          comp=comp, S_p2=S_p2, S_pc2=S_pc2)
+            seen[key] = r
+            out.append(r)
         return out
 
     def compliance(self, u: np.ndarray) -> np.ndarray:

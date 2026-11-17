@@ -79,9 +79,9 @@ interlayer, infill, cover. Missing entries are filled in as follows (`cli._spec`
 | infill | 0 | `infill_weight` when the rule is `penalty` or `both`; forced to 0 for `band` and `free` |
 | cover | 0 | `cover_weight` on a fine grid unless a 6th entry is given; forced to 0 on the 0.4 mm grid |
 
-**Worked example.** The table below is the bracket run `runs/repro/phaseA/D_s0`, from its start
-to its end. It used weights `0.5,1,1,0.3,1,1`, a scale of 341.67 s for time and 278.36 for
-continuity.
+**Worked example.** The table below is a bracket run of the edit-by-edit optimizer (Nov 13,
+2026, run D of phase A; on branch `selfimprove-cycles`), from its start to its end. It used
+weights `0.5,1,1,0.3,1,1`, a scale of 341.67 s for time and 278.36 for continuity.
 
 | Term | Start | End | Raw change | × weight / scale |
 | --- | --- | --- | --- | --- |
@@ -409,8 +409,9 @@ and stops with the density field, and its ends get T-joints. `--infill-lines who
 run of a line whole instead, by the field's mean along it. On one bracket and one link field
 that cost 5–12% of the start's strength, against 0–1% for T-joints. Window re-lays and stack
 copies anchor the ends they make, and the `anchor` edit anchors one free end. Under `--adapt`
-on the five suite parts (README, cycle 17), free ends per part fell from 38 to 0.2 after
-annealing, with FI_agg unchanged. Without the cost, annealing leaves about 4.
+on the five 2 mm suite parts (cycle 17 of the edit-by-edit optimizer), free ends per part fell
+from 38 to 0.2 after annealing, with FI_agg unchanged. Without the cost, annealing leaves
+about 4. Ribbon layouts (below) have no free ends by construction.
 
 ## Interlayer (Z) strength
 
@@ -595,6 +596,29 @@ drift. The viewer's FI channel shows each cell's FI.
 | `p_norm`, `c_stroke`, `c_travel`, `c_boundary_end` | `ScoreConfig` (code only) | 8, 1.0, 0.05, 0.5 | aggregate exponent and continuity costs |
 | `c_free_end` | `ScoreConfig`, `--free-end-cost` | 1.0 | cost of a path end no other bead touches |
 
+## Scoring ribbon layouts
+
+Ribbon (surface) infill (`rltp/surfaces`, the design doc's "Surface infill") reaches the
+evaluator as ordinary bead paths: `layout_snapshot` writes `nxt`/`prv`/`mask` for every infill
+layer and `PartState.restore` re-scores the whole part (`full_recheck`, about 0.7 s on the
+5 mm frame). Every term applies unchanged. What the layout step decides, and so what the terms
+see:
+
+- **Clearance.** A ribbon's nodes keep at least kb − 1 cells (0.3 mm on the 0.1 mm grid) from
+  every other bead, so neighbouring beads overlap by at most a quarter of a width; the overlap
+  is over-extrusion, charged by the coverage term. Closer than that, the later ribbon is cut.
+- **Crossings** are cut into two T-joints (the node grid can't share a cell between two
+  strokes). Each cut end touches the bead it met, so it is anchored, not free; continuity
+  charges the extra stroke. With `alternate`, odd layers cut the other ribbon, so the joints
+  don't stack and the interlayer term sees beads crossing over each other.
+- **Merged ends.** Connectors added while merging are beads like any other: print time,
+  material, coverage and the FEA all count them.
+- **Identical infill layers.** Vertical ribbons give every infill layer of one geometry the
+  same layout (two with `alternate`). Stacked beads bond fully in the interlayer term; their
+  ends stack too, which bond quality charges. 3D ribbons (`--z-levels`) shift from layer to
+  layer by up to tan(max_lean) × 0.2 mm, which the interlayer term sees as less overlap
+  between bonded layers and fewer stacked ends.
+
 ## Code map
 
 | File | What it holds |
@@ -613,6 +637,7 @@ drift. The viewer's FI channel shows each cell's FI.
 | [rltp/cover/paths.py](../rltp/cover/paths.py) | fine grid, `--directions path`: each node's path direction (`node_angles`), per-cell stiffness moments and direction pairs |
 | [rltp/loop/optimize.py](../rltp/loop/optimize.py) | warmup, temperature unit, acceptance, per-pass recheck |
 | [rltp/search/fields.py](../rltp/search/fields.py) | `FieldModel`: a continuous copy of the laminate strength term (stiffness, Tsai-Wu FI, p-norm aggregate) for the gradient start; not part of the score, but it must follow any change to the strength model |
+| [rltp/surfaces/layout.py](../rltp/surfaces/layout.py) | ribbon infill: `lay` (rasterize, clip, cut, merge ends, anchor) and `layout_snapshot` (every infill layer, for `PartState.restore`); not part of the score |
 
 ## Tests
 
@@ -628,6 +653,7 @@ drift. The viewer's FI channel shows each cell's FI.
 | Interlayer | `test_interface_statics_resultants`, `test_bond_quality_falls_with_delay`, `test_zbond_rewards_overlap_between_layers` |
 | Sparse scoring | `test_empty_cells_carry_no_failure_index`, `test_laminate_infill_matters_less_than_split`, `test_penalty_rule_scores_distance_from_target` |
 | Gradient start's copy of the strength term | `test_rotation_and_tsai_wu_match_the_evaluator`, `test_field_model_matches_the_evaluator_on_a_fine_grid` (within 3%), `test_field_gradient_matches_finite_differences` (tests/test_fields.py) |
+| Ribbon layouts are valid covers | `test_lay_lines_is_valid_anchored_and_merges_ends`, `test_crossing_ribbons_are_cut_into_t_joints`, `test_layout_snapshot_lays_every_infill_layer_and_scores` (tests/test_ribbons.py) |
 
 ## Adding a score term
 

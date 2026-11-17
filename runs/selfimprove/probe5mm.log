@@ -1,5 +1,0 @@
-[rltp] sliced 25 layers, grid 422x242 at p=0.1 mm, 572666 cells (582.7s)
-[rltp] gradient start: FI_agg 0.9622 against 1.4715 for the stress start; best of 8 starts by score: random1 (field model 0.7862 -> 0.7012, rounded 0.7193); starts within 3.2% after rounding; 575s
-[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 572666 of 992575 cells filled, infill 40.0% of the optional cells (target 40%, rule both), 0 unsupported
-part     arm      start   final    FI%  case% worst% dirchg fillchg     eff2 0->1     eff8 0->1        align2         wall8   strokes   min
-hook     ADAPT      0.0    23.1  -21.0  -15.9    2.7  0.100   0.111  0.897->0.899  0.347->0.407  0.365->0.400  0.176->0.822  643->649   14.4

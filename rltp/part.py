@@ -297,7 +297,16 @@ class PartState:
 
     def _lam_full_path(self, lam) -> None:
         lam.path_reset()
-        cols = [self._lam_layer_path(L) for L in self.layers]
+        # layers sharing one derived-data cache (rltp.surfaces.layout.apply_layout: identical
+        # layouts on identical geometry) give identical columns: compute each once
+        memo: dict = {}
+        cols = []
+        for L in self.layers:
+            key = (id(L._cache), L.h)
+            c = memo.get(key)
+            if c is None:
+                c = memo[key] = self._lam_layer_path(L)
+            cols.append(c)
         self.lam_cb = [c[0] for c in cols]
         self.lam_wh = [c[1] for c in cols]
         self.lam_fill = [c[2] for c in cols]

@@ -1,0 +1,183 @@
+{
+ "part": "plate",
+ "settings": {
+  "part": "plate",
+  "out": "/mnt/c/Users/aling/AppData/Local/Temp/claude/d456ea58d51e4ea0/3af26351-b34c-43aa-bb08-09564426bf1e/scratchpad/rb/screen/plate_cross45",
+  "angle": 45.0,
+  "spacing": 1.0,
+  "cross": true,
+  "rings": 0,
+  "ring_gap": 0.4,
+  "alternate": true,
+  "grid": 4.0,
+  "amp": 1.5,
+  "sigma": 0.3,
+  "evals": 0,
+  "popsize": 12,
+  "workers": 6,
+  "seed": 0
+ },
+ "ribbons": 54,
+ "warp_parameters": 0,
+ "run_s": 14.8,
+ "slicer": {
+  "objective": 0.0,
+  "fi_agg": 1.0000000000000084,
+  "time_s": 1083.1037135272363,
+  "strokes": 801,
+  "free_ends": 0,
+  "infill_pct": 39.675481456083205,
+  "travel_mm": 6736.27760908115,
+  "retractions": 772,
+  "raw": {
+   "strength": -8.437694987151153e-15,
+   "time": -1083.1037135272363,
+   "cont": -1655.5347011351437,
+   "inter": -4.46748436916299,
+   "infill": -0.0032451854391679635,
+   "cover": -0.01277344360637799,
+   "stiff": -0.0,
+   "bulk": 8.881784197001256e-16
+  }
+ },
+ "start": {
+  "objective": {
+   "total": -291.11820782005344,
+   "strength": 4.211,
+   "time": -32.289,
+   "cont": -239.093,
+   "inter": -20.055,
+   "infill": -4.565,
+   "cover": -0.664,
+   "stiff": 0.474,
+   "bulk": 0.862
+  },
+  "fi_agg": 0.9192215304799077,
+  "time_s": 1432.825769626612,
+  "strokes": 4150,
+  "free_ends": 0,
+  "infill_pct": 35.1104246773285,
+  "travel_mm": 11610.413018387939,
+  "retractions": 4121,
+  "raw": {
+   "strength": 0.08422812965847366,
+   "time": -1432.825769626612,
+   "cont": -5613.801627298492,
+   "inter": -5.135982849169336,
+   "infill": -0.04889575322671502,
+   "cover": -0.019409391120837893,
+   "stiff": 0.009476923283569349,
+   "bulk": 0.004309927912037797
+  },
+  "layout": [
+   {
+    "pieces": 272,
+    "loops": 0,
+    "links": 84,
+    "anchored": 343,
+    "nodes": 10103,
+    "extra": {}
+   },
+   {
+    "pieces": 272,
+    "loops": 0,
+    "links": 83,
+    "anchored": 345,
+    "nodes": 10081,
+    "extra": {}
+   }
+  ]
+ },
+ "best": {
+  "objective": {
+   "total": -291.11820782005344,
+   "strength": 4.211,
+   "time": -32.289,
+   "cont": -239.093,
+   "inter": -20.055,
+   "infill": -4.565,
+   "cover": -0.664,
+   "stiff": 0.474,
+   "bulk": 0.862
+  },
+  "fi_agg": 0.9192215304799077,
+  "time_s": 1432.825769626612,
+  "strokes": 4150,
+  "free_ends": 0,
+  "infill_pct": 35.1104246773285,
+  "travel_mm": 11610.413018387939,
+  "retractions": 4121,
+  "raw": {
+   "strength": 0.08422812965847366,
+   "time": -1432.825769626612,
+   "cont": -5613.801627298492,
+   "inter": -5.135982849169336,
+   "infill": -0.04889575322671502,
+   "cover": -0.019409391120837893,
+   "stiff": 0.009476923283569349,
+   "bulk": 0.004309927912037797
+  },
+  "layout": [
+   {
+    "pieces": 272,
+    "loops": 0,
+    "links": 84,
+    "anchored": 343,
+    "nodes": 10103,
+    "extra": {}
+   },
+   {
+    "pieces": 272,
+    "loops": 0,
+    "links": 83,
+    "anchored": 345,
+    "nodes": 10081,
+    "extra": {}
+   }
+  ],
+  "x": []
+ },
+ "reference": {
+  "gradient_start": {
+   "objective": {
+    "total": -123.33349863857686,
+    "strength": 12.302,
+    "time": -23.87,
+    "cont": -143.773,
+    "inter": -7.888,
+    "infill": 0.063,
+    "cover": -1.491,
+    "stiff": 12.369,
+    "bulk": 28.954
+   },
+   "fi_agg": 0.7818979816606151,
+   "time_s": 1341.6386620303047,
+   "strokes": 2215
+  },
+  "final": {
+   "objective": {
+    "total": 19.525602511622093,
+    "strength": 35.597,
+    "time": -24.395,
+    "cont": -48.564,
+    "inter": 4.938,
+    "infill": -1.672,
+    "cover": -2.639,
+    "stiff": 16.907,
+    "bulk": 39.354
+   },
+   "fi_agg": 0.4906953375327707,
+   "time_s": 1347.3301808060953,
+   "strokes": 1629
+  }
+ },
+ "history": [
+  {
+   "evals": 1,
+   "best": -291.11820782005344,
+   "gen_best": -291.11820782005344,
+   "gen_mean": -291.11820782005344,
+   "sigma": 0.3
+  }
+ ]
+}
