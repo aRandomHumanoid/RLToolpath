@@ -229,8 +229,11 @@ def time_polylines(L: Layer, pc: Pieces, mot: Motion, poly: dict) -> Timing:
     for si, pid in enumerate(order):
         cells = np.asarray(pc.cells[pid], np.int64)
         loop = bool(pc.is_loop[pid])
-        verts, link_seg = poly[pid]
-        r, c = np.divmod(verts, W)
+        verts, link_seg = poly[pid][:2]
+        if len(poly[pid]) > 2:                 # fitted vertices (fit mode): (column, row), floats
+            c, r = poly[pid][2][:, 0], poly[pid][2][:, 1]
+        else:
+            r, c = np.divmod(verts, W)
         u, v = (c + 0.5) * p, (r + 0.5) * p
         su[si], sv[si] = u[0], v[0]
         eu[si], ev[si] = u[-1], v[-1]

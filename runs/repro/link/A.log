@@ -1,0 +1,153 @@
+[rltp] sliced 10 layers, grid 122x442 at p=0.1 mm, 382051 cells (1.2s)
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 382051 of 471760 cells filled, infill 41.5% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] 4 annealing chains from 1 start(s), 4 processes
+[rltp] chain 1: iter 200 evals 200 total -2.8280 temp 0.100
+[rltp] chain 2: iter 200 evals 200 total -2.7657 temp 0.100
+[rltp] chain 0: iter 200 evals 200 total -2.8061 temp 0.100
+[rltp] chain 3: iter 200 evals 200 total -2.8037 temp 0.100
+[rltp] chain 1: pass 0: gain 0.2304 accepted 97/284 total -2.6604 best -2.6604 temp 0.100 drift 1.64e-12
+[rltp] chain 2: pass 0: gain 0.3754 accepted 96/299 total -2.5154 best -2.5154 temp 0.100 drift 6.52e-11
+[rltp] chain 3: pass 0: gain 0.2659 accepted 99/288 total -2.6249 best -2.6249 temp 0.100 drift 1.34e-12
+[rltp] chain 1: iter 400 evals 400 total -2.5869 temp 0.075
+[rltp] chain 2: iter 400 evals 400 total -2.5014 temp 0.075
+[rltp] chain 0: pass 0: gain 0.2440 accepted 106/302 total -2.6468 best -2.6468 temp 0.100 drift 1.41e-11
+[rltp] chain 3: iter 400 evals 400 total -2.5868 temp 0.075
+[rltp] chain 0: iter 400 evals 400 total -2.6380 temp 0.075
+[rltp] chain 1: pass 1: gain 0.0761 accepted 62/269 total -2.5843 best -2.5843 temp 0.075 drift 1.97e-11
+[rltp] chain 2: pass 1: gain 0.0070 accepted 73/256 total -2.5083 best -2.5083 temp 0.075 drift 1.76e-11
+[rltp] chain 1: iter 600 evals 600 total -2.5783 temp 0.050
+[rltp] chain 2: iter 600 evals 600 total -2.5100 temp 0.050
+[rltp] chain 3: pass 1: gain 0.0870 accepted 83/295 total -2.5378 best -2.5378 temp 0.075 drift 1.72e-13
+[rltp] chain 0: iter 600 evals 600 total -2.5571 temp 0.075
+[rltp] chain 3: iter 600 evals 600 total -2.5382 temp 0.050
+[rltp] chain 0: pass 1: gain 0.0900 accepted 87/304 total -2.5568 best -2.5568 temp 0.075 drift 8.78e-12
+[rltp] chain 1: iter 800 evals 800 total -2.5660 temp 0.050
+[rltp] chain 1: pass 2: gain 0.0225 accepted 55/251 total -2.5618 best -2.5618 temp 0.050 drift 1.92e-11
+[rltp] chain 2: iter 800 evals 800 total -2.4973 temp 0.050
+[rltp] chain 0: iter 800 evals 800 total -2.5526 temp 0.050
+[rltp] chain 3: iter 800 evals 800 total -2.5305 temp 0.050
+[rltp] chain 2: pass 2: gain 0.0172 accepted 68/273 total -2.4912 best -2.4912 temp 0.050 drift 2.21e-12
+[rltp] chain 3: pass 2: gain 0.0393 accepted 66/295 total -2.4985 best -2.4985 temp 0.050 drift 8.07e-12
+[rltp] chain 0: pass 2: gain 0.0130 accepted 63/304 total -2.5438 best -2.5438 temp 0.050 drift 4.80e-11
+[rltp] chain 1: iter 1000 evals 1000 total -2.5164 temp 0.025
+[rltp] chain 2: iter 1000 evals 1000 total -2.4834 temp 0.025
+[rltp] chain 3: iter 1000 evals 1000 total -2.4947 temp 0.025
+[rltp] chain 0: iter 1000 evals 1000 total -2.5280 temp 0.025
+[rltp] chain 1: pass 3: gain 0.0570 accepted 58/296 total -2.5048 best -2.5048 temp 0.025 drift 2.08e-11
+[rltp] chain 2: pass 3: gain 0.0096 accepted 51/262 total -2.4816 best -2.4816 temp 0.025 drift 1.09e-11
+[rltp] chain 1: iter 1200 evals 1200 total -2.4757 temp 0.000
+[rltp] chain 2: iter 1200 evals 1200 total -2.4676 temp 0.000
+[rltp] chain 3: pass 3: gain 0.0116 accepted 59/298 total -2.4870 best -2.4870 temp 0.025 drift 2.81e-11
+[rltp] chain 3: iter 1200 evals 1200 total -2.4868 temp 0.000
+[rltp] chain 0: iter 1200 evals 1200 total -2.4923 temp 0.025
+[rltp] chain 0: pass 3: gain 0.0515 accepted 66/305 total -2.4923 best -2.4923 temp 0.025 drift 3.87e-11
+[rltp] chain 1: pass 4: gain 0.0413 accepted 28/298 total -2.4634 best -2.4634 temp 0.000 drift 3.53e-11
+[rltp] chain 1: iter 1400 evals 1400 total -2.4634 temp 0.000
+[rltp] chain 2: pass 4: gain 0.0427 accepted 32/289 total -2.4389 best -2.4389 temp 0.000 drift 1.48e-11
+[rltp] chain 2: iter 1400 evals 1400 total -2.4388 temp 0.000
+[rltp] chain 3: iter 1400 evals 1400 total -2.4751 temp 0.000
+[rltp] chain 0: iter 1400 evals 1400 total -2.4790 temp 0.000
+[rltp] chain 3: pass 4: gain 0.0148 accepted 44/299 total -2.4721 best -2.4721 temp 0.000 drift 4.13e-12
+[rltp] chain 0: pass 4: gain 0.0187 accepted 31/304 total -2.4736 best -2.4736 temp 0.000 drift 3.17e-11
+[rltp] chain 1: iter 1600 evals 1600 total -2.4523 temp 0.000
+[rltp] chain 3: iter 1600 evals 1600 total -2.4659 temp 0.000
+[rltp] chain 0: iter 1600 evals 1600 total -2.4632 temp 0.000
+[rltp] chain 2: iter 1600 evals 1600 total -2.4213 temp 0.000
+[rltp] chain 1: pass 5: gain 0.0137 accepted 22/305 total -2.4498 best -2.4498 temp 0.000 drift 3.44e-11
+[rltp] chain 2: pass 5: gain 0.0201 accepted 35/294 total -2.4188 best -2.4188 temp 0.000 drift 3.18e-11
+[rltp] chain 1: iter 1800 evals 1800 total -2.4375 temp 0.000
+[rltp] chain 3: pass 5: gain 0.0176 accepted 40/297 total -2.4545 best -2.4545 temp 0.000 drift 1.73e-11
+[rltp] chain 0: iter 1800 evals 1800 total -2.4441 temp 0.000
+[rltp] chain 3: iter 1800 evals 1800 total -2.4545 temp 0.000
+[rltp] chain 2: iter 1800 evals 1800 total -2.4116 temp 0.000
+[rltp] chain 0: pass 5: gain 0.0297 accepted 31/302 total -2.4439 best -2.4439 temp 0.000 drift 1.79e-11
+[rltp] chain 1: iter 2000 evals 2000 total -2.4308 temp 0.000
+[rltp] chain 1: pass 6: gain 0.0191 accepted 30/312 total -2.4307 best -2.4307 temp 0.000 drift 4.78e-12
+[rltp] chain 0: iter 2000 evals 2000 total -2.4345 temp 0.000
+[rltp] chain 2: pass 6: gain 0.0141 accepted 34/303 total -2.4047 best -2.4047 temp 0.000 drift 1.08e-11
+[rltp] chain 3: iter 2000 evals 2000 total -2.4386 temp 0.000
+[rltp] chain 2: iter 2000 evals 2000 total -2.4047 temp 0.000
+[rltp] chain 3: pass 6: gain 0.0170 accepted 23/299 total -2.4375 best -2.4375 temp 0.000 drift 3.16e-11
+[rltp] chain 1: iter 2200 evals 2200 total -2.4287 temp 0.000
+[rltp] chain 0: pass 6: gain 0.0115 accepted 39/305 total -2.4324 best -2.4324 temp 0.000 drift 4.69e-12
+[rltp] chain 0: iter 2200 evals 2200 total -2.4281 temp 0.000
+[rltp] chain 3: iter 2200 evals 2200 total -2.4367 temp 0.000
+[rltp] chain 2: iter 2200 evals 2200 total -2.3930 temp 0.000
+[rltp] chain 1: pass 7: gain 0.0056 accepted 28/308 total -2.4251 best -2.4251 temp 0.000 drift 5.14e-11
+[rltp] chain 2: pass 7: gain 0.0161 accepted 36/302 total -2.3887 best -2.3887 temp 0.000 drift 2.01e-11
+[rltp] chain 1: iter 2400 evals 2400 total -2.4188 temp 0.000
+[rltp] chain 3: pass 7: gain 0.0153 accepted 31/297 total -2.4223 best -2.4223 temp 0.000 drift 2.31e-11
+[rltp] chain 0: iter 2400 evals 2400 total -2.4224 temp 0.000
+[rltp] chain 3: iter 2400 evals 2400 total -2.4186 temp 0.000
+[rltp] chain 0: pass 7: gain 0.0121 accepted 23/307 total -2.4203 best -2.4203 temp 0.000 drift 1.03e-12
+[rltp] chain 2: iter 2400 evals 2400 total -2.3876 temp 0.000
+[rltp] chain 1: iter 2600 evals 2600 total -2.4067 temp 0.000
+[rltp] chain 1: pass 8: gain 0.0211 accepted 28/306 total -2.4039 best -2.4039 temp 0.000 drift 4.15e-11
+[rltp] chain 0: iter 2600 evals 2600 total -2.4182 temp 0.000
+[rltp] chain 3: iter 2600 evals 2600 total -2.4101 temp 0.000
+[rltp] chain 2: pass 8: gain 0.0072 accepted 22/301 total -2.3814 best -2.3814 temp 0.000 drift 1.05e-11
+[rltp] chain 2: iter 2600 evals 2600 total -2.3780 temp 0.000
+[rltp] chain 3: pass 8: gain 0.0154 accepted 29/297 total -2.4069 best -2.4069 temp 0.000 drift 1.82e-12
+[rltp] chain 1: iter 2800 evals 2800 total -2.3990 temp 0.000
+[rltp] chain 0: pass 8: gain 0.0064 accepted 28/306 total -2.4139 best -2.4139 temp 0.000 drift 2.27e-11
+[rltp] chain 0: iter 2800 evals 2800 total -2.4125 temp 0.000
+[rltp] chain 3: iter 2800 evals 2800 total -2.4030 temp 0.000
+[rltp] chain 2: iter 2800 evals 2800 total -2.3683 temp 0.000
+[rltp] chain 1: pass 9: gain 0.0096 accepted 18/302 total -2.3943 best -2.3943 temp 0.000 drift 3.62e-11
+[rltp] chain 2: pass 9: gain 0.0178 accepted 24/299 total -2.3636 best -2.3636 temp 0.000 drift 8.66e-13
+[rltp] chain 1: iter 3000 evals 3000 total -2.3830 temp 0.000
+[rltp] chain 3: pass 9: gain 0.0105 accepted 23/296 total -2.3964 best -2.3964 temp 0.000 drift 5.38e-12
+[rltp] chain 0: iter 3000 evals 3000 total -2.4062 temp 0.000
+[rltp] chain 3: iter 3000 evals 3000 total -2.3889 temp 0.000
+[rltp] chain 2: iter 3000 evals 3000 total -2.3627 temp 0.000
+[rltp] chain 0: pass 9: gain 0.0184 accepted 29/311 total -2.3956 best -2.3956 temp 0.000 drift 2.37e-12
+[rltp] chain 1: iter 3200 evals 3200 total -2.3695 temp 0.000
+[rltp] chain 0: iter 3200 evals 3200 total -2.3837 temp 0.000
+[rltp] chain 1: pass 10: gain 0.0250 accepted 36/309 total -2.3692 best -2.3692 temp 0.000 drift 4.96e-12
+[rltp] chain 3: iter 3200 evals 3200 total -2.3836 temp 0.000
+[rltp] chain 2: pass 10: gain 0.0106 accepted 27/308 total -2.3530 best -2.3530 temp 0.000 drift 3.33e-11
+[rltp] chain 2: iter 3200 evals 3200 total -2.3499 temp 0.000
+[rltp] chain 3: pass 10: gain 0.0146 accepted 27/301 total -2.3817 best -2.3817 temp 0.000 drift 1.06e-11
+[rltp] chain 0: pass 10: gain 0.0133 accepted 33/303 total -2.3823 best -2.3823 temp 0.000 drift 4.30e-12
+[rltp] chain 1: iter 3400 evals 3400 total -2.3678 temp 0.000
+[rltp] chain 0: iter 3400 evals 3400 total -2.3777 temp 0.000
+[rltp] chain 3: iter 3400 evals 3400 total -2.3740 temp 0.000
+[rltp] chain 2: iter 3400 evals 3400 total -2.3284 temp 0.000
+[rltp] chain 1: pass 11: gain 0.0052 accepted 36/307 total -2.3640 best -2.3640 temp 0.000 drift 5.37e-12
+[rltp] chain 2: pass 11: gain 0.0265 accepted 34/297 total -2.3265 best -2.3265 temp 0.000 drift 2.19e-11
+[rltp] chain 3: pass 11: gain 0.0148 accepted 28/297 total -2.3670 best -2.3670 temp 0.000 drift 4.17e-11
+[rltp] chain 1: iter 3600 evals 3600 total -2.3632 temp 0.000
+[rltp] chain 3: iter 3600 evals 3600 total -2.3670 temp 0.000
+[rltp] chain 0: iter 3600 evals 3600 total -2.3659 temp 0.000
+[rltp] chain 2: iter 3600 evals 3600 total -2.3229 temp 0.000
+[rltp] chain 0: pass 11: gain 0.0203 accepted 25/304 total -2.3620 best -2.3620 temp 0.000 drift 2.84e-12
+[rltp] chain 1: iter 3800 evals 3800 total -2.3490 temp 0.000
+[rltp] chain 0: iter 3800 evals 3800 total -2.3616 temp 0.000
+[rltp] chain 3: iter 3800 evals 3800 total -2.3656 temp 0.000
+[rltp] chain 1: pass 12: gain 0.0153 accepted 26/300 total -2.3486 best -2.3486 temp 0.000 drift 2.99e-11
+[rltp] chain 2: pass 12: gain 0.0072 accepted 25/296 total -2.3193 best -2.3193 temp 0.000 drift 3.54e-11
+[rltp] chain 2: iter 3800 evals 3800 total -2.3163 temp 0.000
+[rltp] chain 3: pass 12: gain 0.0047 accepted 23/299 total -2.3623 best -2.3623 temp 0.000 drift 2.12e-11
+[rltp] chain 1: iter 4000 evals 4000 total -2.3419 temp 0.000
+[rltp] chain 1: pass 13: gain 0.0068 accepted 14/153 total -2.3419 best -2.3419 temp 0.000 drift 1.07e-11
+[rltp] chain 0: pass 12: gain 0.0057 accepted 24/301 total -2.3563 best -2.3563 temp 0.000 drift 3.55e-12
+[rltp] chain 3: iter 4000 evals 4000 total -2.3600 temp 0.000
+[rltp] chain 3: pass 13: gain 0.0023 accepted 13/142 total -2.3600 best -2.3600 temp 0.000 drift 3.80e-11
+[rltp] chain 0: iter 4000 evals 4000 total -2.3509 temp 0.000
+[rltp] chain 0: pass 13: gain 0.0054 accepted 4/42 total -2.3509 best -2.3509 temp 0.000 drift 3.14e-11
+[rltp] chain 2: iter 4000 evals 4000 total -2.3122 temp 0.000
+[rltp] chain 2: pass 13: gain 0.0072 accepted 17/221 total -2.3122 best -2.3122 temp 0.000 drift 4.34e-13
+[rltp]   chain 2 (seed 2, start as built): total -2.8908 -> -2.3122, FI_agg 0.8824, strokes 141, reheats 0
+[rltp]   chain 1 (seed 1, start as built): total -2.8908 -> -2.3419, FI_agg 0.9337, strokes 147, reheats 0
+[rltp]   chain 0 (seed 0, start as built): total -2.8908 -> -2.3509, FI_agg 0.9015, strokes 148, reheats 0
+[rltp]   chain 3 (seed 3, start as built): total -2.8908 -> -2.3600, FI_agg 0.8911, strokes 143, reheats 0
+[rltp] wrote runs/repro/link/A/part.gcode, viewer.html, history.jsonl, metrics.json (0.5s)
+[rltp] sa: 4000 evals, 14 passes, stop=max_evals, 2323.2s (best of 4 chains: chain 2)
+[rltp]   fi_agg             0.9977 ->     0.8824
+[rltp]   inter_fi_agg        13.98 ->      8.695
+[rltp]   time_s              369.8 ->      375.4
+[rltp]   strokes               148 ->        141
+[rltp]   travel_mm            1397 ->      380.1
+[rltp]   boundary_ends          10 ->         11
+[rltp]   cells           3.821e+05 ->  3.802e+05
+[rltp]   infill_pct          41.54 ->      41.21

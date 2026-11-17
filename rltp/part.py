@@ -52,10 +52,16 @@ class Candidate:
 
 class PartState:
     def __init__(self, layers: list[Layer], spec: PartSpec, z0: float = 0.0, fea_cache: int = 6,
-                 fea_layers=None):
+                 fea_layers=None, refs: dict | None = None):
+        """refs (from another part's refs()): its load-case scales and stiffness reference,
+        instead of measuring them on these layers (every start shares the slicer layout's)."""
         self.layers = layers
         self.fea_layers = None if fea_layers is None else set(fea_layers)
         self.spec = spec
+        for L in layers:                 # true directions: fine layers print fitted segments
+            if L.kb > 1 and L.aux is not None and bool(L.aux.get("fit")) != self._path:
+                L.aux["fit"] = self._path    # (rltp.cover.beads.fit_mode)
+                L.invalidate()
         self.z0 = z0
         self.terms = tuple(spec.terms)
         self.p = spec.score.p_norm
@@ -101,19 +107,35 @@ class PartState:
         self.best_raw = None
         self.case_scale = None        # 1 / baseline FI_agg per load case (several cases only)
         self.case_fi0 = None
+        self.comp0 = None             # each case's compliance on the starting layout (stiffness term)
+        self.case_scale2 = None       # 1 / baseline p = 2 FI_agg per load case (bulk term)
         self._build_interfaces()
+        if refs is not None and refs.get("case_scale") is not None:
+            self.case_scale = np.asarray(refs["case_scale"], float)
+            self.case_fi0 = np.asarray(refs["case_fi0"], float)
+            if refs.get("case_scale2") is not None:
+                self.case_scale2 = np.asarray(refs["case_scale2"], float)
         self.full_recheck()
-        if spec.loads.n_cases > 1 and spec.loads.has_2d:
+        if spec.loads.n_cases > 1 and spec.loads.has_2d and self.case_scale is None:
             # score every case against its own starting FI_agg, so force sizes don't matter
             # and the p-norm over cases favours whichever case is furthest behind
             fi0 = self.case_fi_agg()
             self.case_fi0 = fi0
             self.case_scale = np.where(fi0 > 0, 1.0 / np.where(fi0 > 0, fi0, 1.0), 0.0)
+            fi2 = self.case_fi_agg(2)
+            self.case_scale2 = np.where(fi2 > 0, 1.0 / np.where(fi2 > 0, fi2, 1.0), 0.0)
             self._fea.clear()
             self.lam = None
             self.full_recheck()
+        self.comp0 = self._comp_total() if refs is None or refs.get("comp0") is None else \
+            np.asarray(refs["comp0"], float)
         if self.norm.mode == "relative":
             self.norm.set_reference(self.raw())   # scores are fractions of this starting state
+
+    def refs(self) -> dict:
+        """The references a part built from another start should share (see __init__)."""
+        return {"case_scale": self.case_scale, "case_fi0": self.case_fi0, "comp0": self.comp0,
+                "case_scale2": self.case_scale2}
 
     # -------------------------------------------------------------- setup
 
@@ -134,6 +156,9 @@ class PartState:
         fp = FEAProblem(L.part_mask, L.material_frame, L.h, self.spec.material, self.spec.loads, scale,
                         z=L.z - L.h / 2 + self.z0, p_norm=self.p, case_scale=self.case_scale,
                         refine=getattr(self.spec.score, "fea_refine", 1),
+                        coarsen=getattr(self.spec.score, "fea_coarsen", 1),
+                        clamp_band=getattr(self.spec.score, "clamp_band", 0.0),
+                        case_scale2=self.case_scale2,
                         solver=getattr(self.spec.score, "solver", "fast"))
         self._fea[k] = fp
         while len(self._fea) > self._fea_cache:
@@ -175,6 +200,9 @@ class PartState:
             self.lam = FEAProblem(union, L0.material_frame, 1.0, self.spec.material, self.spec.loads, 1.0,
                                   z=None, p_norm=self.p, case_scale=self.case_scale,
                                   refine=getattr(self.spec.score, "fea_refine", 1),
+                                  coarsen=getattr(self.spec.score, "fea_coarsen", 1),
+                        clamp_band=getattr(self.spec.score, "clamp_band", 0.0),
+                        case_scale2=self.case_scale2,
                                   solver=getattr(self.spec.score, "solver", "fast"))
         return self.lam if self.lam is not None and self.lam.active else None
 
@@ -201,6 +229,101 @@ class PartState:
         dens = np.where(fill, 1.0, np.where(inpart, VOID, 0.0)) * L.h
         return dens * wh, dens * (1 - wh), wh, fill, None
 
+    @property
+    def _path(self) -> bool:
+        """Score beads along their own paths (ScoreConfig.directions = "path")."""
+        return getattr(self.spec.score, "directions", "classes") == "path"
+
+    def _lam_layer_path(self, L: Layer):
+        """(coefficients (5, n), wh, fill, pairs) of one layer over the laminate's cells, its
+        beads read along their paths (rltp.cover.paths): thickness x material x the mean of
+        (1, cos 2a, sin 2a, cos 4a, sin 4a) over the beads covering each cell (an empty cell's
+        floor stiffness as the classes give it: half 0, half 90 degrees), the share laid along
+        x (stress outputs), filled flags, and the (cell position, table slot) pairs of the
+        directions each cell holds, sorted by cell."""
+        from rltp.cover.paths import cell_bins, cell_moments
+        if L.kb <= 1:
+            raise ValueError("--directions path needs a fine bead grid (cell below the bead width)")
+        lam = self.lam
+        cells = lam.cells
+        inpart = L.part_mask.reshape(-1)[cells]
+        D = L.density.reshape(-1)[cells]
+        fill = D >= 0.5
+        dens = np.where(inpart, np.clip(D, VOID, 1.0), 0.0) * L.h
+        mo = cell_moments(L)[cells]
+        none = mo[:, 0] <= 0
+        c2, s2, c4, s4 = (np.where(none, d, mo[:, j]) for j, d in ((1, 0.0), (2, 0.0), (3, 1.0), (4, 0.0)))
+        coef = np.stack([dens, dens * c2, dens * s2, dens * c4, dens * s4])
+        if getattr(self, "_lam_pos", None) is None:
+            self._lam_pos = np.full(L.H * L.W, -1, np.int64)
+            self._lam_pos[cells] = np.arange(cells.size)
+        cc, bb = cell_bins(L)
+        pos = self._lam_pos[cc]
+        ok = pos >= 0
+        pos, bb = pos[ok], bb[ok]
+        ok = fill[pos]                                  # only filled cells count
+        pos, bb = pos[ok], bb[ok]
+        order = np.argsort(pos, kind="stable")
+        pos, bb = pos[order], bb[order]
+        slots = lam.path_slots(pos, bb).astype(np.int64)
+        start = np.flatnonzero(np.r_[True, pos[1:] != pos[:-1]]) if pos.size else np.zeros(0, np.int64)
+        rows = pos[start]
+        cnt = np.diff(np.r_[start, pos.size])
+        one = cnt == 1
+        multi = ~one
+        m_idx = np.flatnonzero(multi)
+        msel = np.repeat(multi, cnt)
+        m_cnt = cnt[multi]
+        pr = {"rows": rows, "s_idx": np.flatnonzero(one), "s_slot": slots[start[one]],
+              "m_idx": m_idx, "m_slot": slots[msel],
+              "m_start": np.r_[0, np.cumsum(m_cnt)[:-1]] if m_cnt.size else np.zeros(0, np.int64),
+              "slots": slots}
+        return coef, 0.5 * (1.0 + c2), fill, pr
+
+    def _refc_add(self, slots, sign: int) -> None:
+        n = self.lam._tab_pos.size
+        if self.lam_refc.size < n:
+            self.lam_refc = np.concatenate([self.lam_refc, np.zeros(n - self.lam_refc.size, np.int64)])
+        self.lam_refc += sign * np.bincount(slots, minlength=self.lam_refc.size)
+
+    def _active(self, extra=None) -> np.ndarray:
+        """Table slots some committed layer (or the candidate's `extra`) holds."""
+        n = self.lam._tab_pos.size
+        on = np.zeros(n, bool)
+        on[:self.lam_refc.size] = self.lam_refc > 0
+        if extra is not None:
+            on[extra] = True
+        return np.flatnonzero(on)
+
+    def _lam_full_path(self, lam) -> None:
+        lam.path_reset()
+        cols = [self._lam_layer_path(L) for L in self.layers]
+        self.lam_cb = [c[0] for c in cols]
+        self.lam_wh = [c[1] for c in cols]
+        self.lam_fill = [c[2] for c in cols]
+        self.lam_pairs = [c[3] for c in cols]
+        self.lam_N = [int(L.part_mask.sum()) for L in self.layers]
+        self.lam_ab = np.sum(self.lam_cb, 0)
+        self.lam_refc = np.zeros(0, np.int64)
+        for pr in self.lam_pairs:
+            self._refc_add(pr["slots"], 1)
+        lam.drop_factorization()
+        u, iters, direct = lam.solve_K(lam.assemble_basis(self.lam_ab), direct=True)
+        self.lam_u = u
+        res = lam.post_layers_path(u, self.lam_wh, self.lam_fill, self.lam_N, self.lam_pairs, self._active(),
+                                   iters, direct)
+        for ev, r in zip(self.evals, res):
+            ev.fea = r
+
+    def _lam_propose_path(self, lam, k: int, cand: Layer) -> dict:
+        cb, wh, fill, pr = self._lam_layer_path(cand)
+        ab = self.lam_ab - self.lam_cb[k] + cb
+        u, iters, direct = lam.solve_K(lam.assemble_basis(ab), warm=self.lam_u)
+        whs, fills, pairs = list(self.lam_wh), list(self.lam_fill), list(self.lam_pairs)
+        whs[k], fills[k], pairs[k] = wh, fill, pr
+        res = lam.post_layers_path(u, whs, fills, self.lam_N, pairs, self._active(pr["slots"]), iters, direct)
+        return {"u": u, "res": res, "cb": cb, "wh": wh, "fill": fill, "pairs": pr}
+
     def _lam_K(self, a0, a90, diags):
         """Laminate K; the 45/135-degree terms only when some layer has diagonal beads."""
         if all(d is None for d in diags):
@@ -221,6 +344,8 @@ class PartState:
         lam = self._lam_problem()
         if lam is None:
             return
+        if self._path:
+            return self._lam_full_path(lam)
         cols = [self._lam_layer(L) for L in self.layers]
         self.lam_c0 = [c[0] for c in cols]
         self.lam_c90 = [c[1] for c in cols]
@@ -242,6 +367,8 @@ class PartState:
         lam = self._lam_problem()
         if lam is None:
             return None
+        if self._path:
+            return self._lam_propose_path(lam, k, cand)
         c0, c90, wh, fill, dg = self._lam_layer(cand)
         a0 = self.lam_a0 - self.lam_c0[k] + c0
         a90 = self.lam_a90 - self.lam_c90[k] + c90
@@ -290,6 +417,7 @@ class PartState:
 
     def _recount(self) -> None:
         self.Sp = np.array([e.fea.S_p for e in self.evals])
+        self.Sp2 = np.array([e.fea.S_p2 for e in self.evals])
         self.Np = np.array([e.fea.N for e in self.evals])
         self.Tk = np.array([e.T for e in self.evals])
         self.Ck = np.array([e.cont.C for e in self.evals])
@@ -323,11 +451,30 @@ class PartState:
             "inter": strength_raw(self.ISp.sum(), int(self.INp.sum()), self.p) if self.use_inter else 0.0,
             "infill": self._infill_raw(self.Fk.sum()) if self.sparse else 0.0,
             "cover": self._cover_raw(self.Gk.sum(), self.Ok.sum()) if self.fine else 0.0,
+            "stiff": self._stiff_raw(self._comp_total()),
+            "bulk": strength_raw(self.Sp2.sum(), int(self.Np.sum()), 2.0),
         }
         for t in TERMS:
             if t not in self.terms:
                 out[t] = 0.0
         return out
+
+    def _comp_total(self) -> np.ndarray | None:
+        """Each load case's compliance over the part (laminate: the plate's; split: summed
+        over the layers), or None without in-plane loads."""
+        comps = [e.fea.comp for e in self.evals if e is not None and e.fea.comp is not None]
+        if not comps:
+            return None
+        return np.array(comps[0], float) if self.laminate else np.sum(comps, 0)
+
+    def _stiff_raw(self, comp) -> float:
+        """Minus the log of the mean over cases of compliance relative to the start."""
+        if comp is None or self.comp0 is None:
+            return 0.0
+        ok = self.comp0 > 0
+        if not ok.any():
+            return 0.0
+        return -float(np.log(np.mean(np.asarray(comp)[ok] / self.comp0[ok])))
 
     def _infill_raw(self, filled: float) -> float:
         """Minus the distance of the part's infill fraction from the target."""
@@ -343,16 +490,29 @@ class PartState:
         ev = self._eval_layer(k, cand_layer, warm=old.fea)
         d = {t: 0.0 for t in TERMS}
         lam = self._lam_propose(k, cand_layer) if self.laminate else None
+        lres = None if lam is None else (lam["res"] if isinstance(lam, dict) else lam[1])
         if lam is not None:
-            ev.fea = lam[1][k]
+            ev.fea = lres[k]
         if "strength" in self.terms and lam is not None:
-            Sp = sum(r.S_p for r in lam[1])
+            Sp = sum(r.S_p for r in lres)
             d["strength"] = strength_raw(Sp, int(self.Np.sum()), self.p) - \
                 strength_raw(self.Sp.sum(), int(self.Np.sum()), self.p)
         elif "strength" in self.terms:
             Sp = self.Sp.sum() - old.fea.S_p + ev.fea.S_p
             d["strength"] = strength_raw(Sp, int(self.Np.sum()), self.p) - \
                 strength_raw(self.Sp.sum(), int(self.Np.sum()), self.p)
+        if "bulk" in self.terms:
+            Sp2 = sum(r.S_p2 for r in lres) if lam is not None else self.Sp2.sum() - old.fea.S_p2 + ev.fea.S_p2
+            N = int(self.Np.sum())
+            d["bulk"] = strength_raw(Sp2, N, 2.0) - strength_raw(self.Sp2.sum(), N, 2.0)
+        if "stiff" in self.terms:
+            if lam is not None:
+                comp = lres[0].comp
+            else:
+                cur = self._comp_total()
+                comp = None if cur is None else cur - (old.fea.comp if old.fea.comp is not None else 0) + \
+                    (ev.fea.comp if ev.fea.comp is not None else 0)
+            d["stiff"] = self._stiff_raw(comp) - self._stiff_raw(self._comp_total())
         if "time" in self.terms:
             d["time"] = -(ev.T - old.T)
         if "cont" in self.terms:
@@ -424,7 +584,19 @@ class PartState:
             self.refresh_support((k - 1, k, k + 1))
         self.evals[k] = c.ev
         self.Sp[k], self.Np[k] = c.ev.fea.S_p, c.ev.fea.N
-        if c.lam is not None:            # every layer's stresses moved with the shared strain
+        self.Sp2[k] = c.ev.fea.S_p2
+        if isinstance(c.lam, dict):      # true directions: the same, from the basis coefficients
+            d = c.lam
+            self._refc_add(self.lam_pairs[k]["slots"], -1)
+            self._refc_add(d["pairs"]["slots"], 1)
+            self.lam_ab = self.lam_ab - self.lam_cb[k] + d["cb"]
+            self.lam_cb[k], self.lam_wh[k], self.lam_fill[k], self.lam_pairs[k] = d["cb"], d["wh"], d["fill"], d["pairs"]
+            self.lam_u = d["u"]
+            for j, r in enumerate(d["res"]):
+                self.evals[j].fea = r
+                self.Sp[j] = r.S_p
+                self.Sp2[j] = r.S_p2
+        elif c.lam is not None:          # every layer's stresses moved with the shared strain
             u, res, c0, c90, wh, fill, dg = c.lam
             self.lam_a0 = self.lam_a0 - self.lam_c0[k] + c0
             self.lam_a90 = self.lam_a90 - self.lam_c90[k] + c90
@@ -434,6 +606,7 @@ class PartState:
             for j, r in enumerate(res):
                 self.evals[j].fea = r
                 self.Sp[j] = r.S_p
+                self.Sp2[j] = r.S_p2
         self._share_fi()
         self.Tk[k], self.Ck[k] = c.ev.T, c.ev.cont.C
         for j, r in c.ifaces.items():
@@ -471,15 +644,17 @@ class PartState:
         s = self.Sp.sum()
         return self.Sp / s if s > 0 else np.full(len(self.layers), 1 / max(len(self.layers), 1))
 
-    def case_fi_agg(self) -> np.ndarray | None:
-        """Raw FI_agg of each load case over the part (None with a single case)."""
-        spc = [e.fea.S_pc for e in self.evals if e.fea.S_pc is not None]
+    def case_fi_agg(self, p: float | None = None) -> np.ndarray | None:
+        """Raw FI_agg of each load case over the part (None with a single case); p = 2: the
+        bulk aggregate."""
+        spc = [(e.fea.S_pc if p is None else e.fea.S_pc2) for e in self.evals]
+        spc = [x for x in spc if x is not None]
         if not spc:
             return None
         N = int(self.Np.sum())
         if not N:
             return np.zeros(len(spc[0]))
-        return (np.sum(spc, 0) / N) ** (1 / self.p)
+        return (np.sum(spc, 0) / N) ** (1 / (self.p if p is None else p))
 
     def breakdown(self) -> dict:
         p = self.p
@@ -512,12 +687,15 @@ class PartState:
         return {
             "raw": self.raw(),
             "fi_agg": float((self.Sp.sum() / Nt) ** (1 / p)) if Nt else 0.0,
+            "fi_agg2": float((self.Sp2.sum() / Nt) ** 0.5) if Nt else 0.0,
             "inter_fi_agg": float((self.ISp.sum() / self.INp.sum()) ** (1 / p)) if self.INp.sum() else 0.0,
             "time_s": float(self.Tk.sum()),
+            "compliance_rel": float(np.exp(-self._stiff_raw(self._comp_total()))),
             "strokes": int(sum(e.cont.n_strokes for e in self.evals)),
             "travel_mm": float(sum(e.timing.travel_dist[1:].sum() for e in self.evals)),
             "retractions": int(sum(e.timing.retract[1:].sum() for e in self.evals)),
             "boundary_ends": int(sum(e.cont.n_boundary_ends for e in self.evals)),
+            "free_ends": int(sum(e.cont.n_free_ends for e in self.evals)),
             "layers": len(self.layers),
             "cells": int(sum(L.material.sum() for L in self.layers)),
             **extra,
@@ -593,10 +771,13 @@ def build_part(mesh, spec: PartSpec, baseline: str = "zigzag", rotate: bool = Fa
         solids = solid_masks(parts, pr.solid_layers)
         orient = sweight = None
         field = None
-        if pr.start not in ("slicer", "stress", "stress4", "gradient", "gradient4"):
-            raise ValueError(f"unknown start {pr.start!r}; expected slicer, stress, stress4, gradient "
-                             f"or gradient4")
-        if pr.start in ("stress", "stress4", "gradient", "gradient4"):
+        if pr.start not in ("slicer", "stress", "stress4", "gradient", "gradient4", "gradient16"):
+            raise ValueError(f"unknown start {pr.start!r}; expected slicer, stress, stress4, gradient, "
+                             f"gradient4 or gradient16")
+        if pr.start == "gradient16" and (kb <= 1 or getattr(spec.score, "directions", "classes") != "path"):
+            raise ValueError("the gradient16 start lays beads every 11.25 degrees: it needs a fine grid "
+                             "and --directions path to print and score them")
+        if pr.start in ("stress", "stress4", "gradient", "gradient4", "gradient16"):
             from rltp.eval.stressmap import orientation, orientation4, stress_field
             union = np.zeros_like(parts[0])
             for m_ in parts:
@@ -617,6 +798,8 @@ def build_part(mesh, spec: PartSpec, baseline: str = "zigzag", rotate: bool = Fa
                 # (stressmap.weight + the layouts' sweight would pack it in from the start)
         if pr.infill_pattern not in ("alternate", "stacked"):
             raise ValueError(f"unknown infill pattern {pr.infill_pattern!r}; expected alternate or stacked")
+        if pr.infill_lines not in ("cut", "whole"):
+            raise ValueError(f"unknown infill lines {pr.infill_lines!r}; expected cut or whole")
         spacing = max(1, (2 * radius) // kb) if kb > 1 else 2 * radius   # sparsest lines, in beads
 
         def lay_out(orient_, fill_map=None):
@@ -629,15 +812,23 @@ def build_part(mesh, spec: PartSpec, baseline: str = "zigzag", rotate: bool = Fa
                         L.mframe = L.frame
                         L.frame = node_frame(L.mframe, kb)
                     fine_layout(L, parts[k], solids[k], pr.walls, pr.infill, skin, line,
-                                spacing, kb, orient_, sweight, fill_map)
+                                spacing, kb, orient_, sweight, fill_map, pr.infill_lines)
                 else:
                     fill_sparse(L, parts[k], solids[k], pr.walls, pr.infill, skin, spacing, line,
-                                orient_, sweight, fill_map)
+                                orient_, sweight, fill_map, pr.infill_lines)
 
+        refs = None
+        if orient is not None and spec.loads.has_2d and (spec.loads.n_cases > 1 or "stiff" in spec.terms):
+            # load-case scales and the stiffness reference come from the slicer layout, so
+            # every start is scored on the same footing
+            lay_out(None)
+            refs = PartState(layers, spec, z0=z0).refs()
         lay_out(orient)
-        if pr.start in ("gradient", "gradient4") and field is not None:
+        if pr.start in ("gradient", "gradient4", "gradient16") and field is not None:
             return _gradient_start(layers, spec, z0, field, lay_out, density, 1.0 / spacing,
-                                   diagonals=(pr.start == "gradient4" and kb > 1), opts=fields)
+                                   diagonals=(pr.start in ("gradient4", "gradient16") and kb > 1), opts=fields,
+                                   refs=refs, bins=16 if pr.start == "gradient16" else 4)
+        return PartState(layers, spec, z0=z0, refs=refs)
     return PartState(layers, spec, z0=z0)
 
 
@@ -646,19 +837,20 @@ def _snapshot(layers) -> list:
     return [(L.nxt.copy(), L.prv.copy(), set(L.seam), L.mask.copy()) for L in layers]
 
 
-def _gradient_start(layers, spec, z0, field, lay_out, target, rho_min, diagonals, opts=None):
+def _gradient_start(layers, spec, z0, field, lay_out, target, rho_min, diagonals, opts=None, refs=None,
+                    bins: int = 4):
     """Optimise the bead-direction and infill-density fields on the stress start (the
     gradient layout step, rltp.search.fields) from several starting direction fields, lay
     every layer out from the best, and return the part. The best `opts.keep` layouts go to
     part.start_snaps (annealing chains start from them), the step's numbers to
-    part.start_info."""
+    part.start_info. bins = 16: directions rounded to multiples of 11.25 degrees."""
     from rltp.search.fields import FieldOptions, multi_start
     opts = opts or FieldOptions()
     t = time.time()
-    part = PartState(layers, spec, z0=z0)
+    part = PartState(layers, spec, z0=z0, refs=refs)
     fi_stress = part.breakdown()["fi_agg"]
     p = layers[0].material_frame.p
-    end_cost, w_strength = 0.0, 1.0
+    end_cost, w_strength, w_stiff, w_bulk = 0.0, 1.0, 0.0, 0.0
     if opts.weights is not None:
         # line ends cost continuity and print time, priced in the score's own units (the
         # stress start's term scales) so the field step trades them against strength
@@ -666,10 +858,13 @@ def _gradient_start(layers, spec, z0, field, lay_out, target, rho_min, diagonals
         wf = full_weights(opts.weights)
         sc = part.norm.scale
         w_strength = wf[0] / sc("strength") if wf[0] > 0 else 1.0
+        w_stiff = wf[6] / sc("stiff") if len(wf) > 6 and "stiff" in part.terms else 0.0
+        w_bulk = wf[7] / sc("bulk") if len(wf) > 7 and "bulk" in part.terms else 0.0
         end_cost = opts.end_scale * (wf[2] * opts.end_strokes / sc("cont") + wf[1] * opts.end_seconds / sc("time"))
     results = multi_start(part, field["theta"], target, rho_min, opts, diagonals,
                           min_axis=int(round((2.0 / p) ** 2)), min_diag=int(round((3.0 / p) ** 2)),
-                          progress=lambda m: log.info(m), end_cost=end_cost, w_strength=w_strength)
+                          progress=lambda m: log.info(m), end_cost=end_cost, w_strength=w_strength,
+                          w_stiff=w_stiff, w_bulk=w_bulk, bins=bins)
 
     def place(res):
         """Lay out one result, shifting its density field until the laid-out infill share lands
@@ -711,7 +906,7 @@ def _gradient_start(layers, spec, z0, field, lay_out, target, rho_min, diagonals
         place(res)
         others.append(_snapshot(layers))
     shift, n_layouts = place(keep[0])
-    out = PartState(layers, spec, z0=z0)
+    out = PartState(layers, spec, z0=z0, refs=part.refs())
     best = keep[0]
     mask = best.theta_cells
     rounded = [r.fi_rounded for r in results]

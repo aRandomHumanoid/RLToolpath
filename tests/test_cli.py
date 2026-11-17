@@ -34,6 +34,20 @@ def test_baseline_cli(small_part, tmp_path):
     assert meta["final"]["layers"] == 3
 
 
+def test_no_loads_scores_random_cases(small_part, tmp_path):
+    """Without loads.yaml, strength is scored over 10 random force and 10 random moment cases,
+    each with supports of its own and none special."""
+    mesh, _ = small_part
+    out = tmp_path / "noloads"
+    assert main(["baseline", str(mesh), "--printer", str(ROOT / "configs/printer.yaml"),
+                 "--out", str(out), "--cell", "0"]) == 0
+    meta = json.loads((out / "metrics.json").read_text())
+    cases = meta["load_cases"]
+    assert len(cases) == 20 and all("supports" in c[0] for c in cases)
+    assert sum("moment" in c[0] for c in cases) == 10
+    assert len(meta["final"]["case_fi_agg"]) == 20
+
+
 def test_optimize_cli(small_part, tmp_path):
     mesh, loads = small_part
     out = tmp_path / "opt"
@@ -86,3 +100,22 @@ def test_optimize_with_policy_cli(small_part, tmp_path):
                  "--cell", "0", "--out", str(out)]) == 0
     meta = json.loads((out / "metrics.json").read_text())
     assert meta["proposer"] == "policy" and meta["loop"]["evals"] <= 101
+
+
+def test_adapt_preset_fills_only_unset_settings():
+    """--adapt sets the self-improvement cycles' settings where the command line leaves the
+    default, and leaves explicit ones alone."""
+    import numpy as np
+    from rltp.cli import _apply_adapt, build_parser
+    from rltp.config import parse_weights
+    base = ["optimize", "m.stl", "--printer", "p.yaml", "--out", "o"]
+    args = build_parser().parse_args(base + ["--adapt", "--guide", "0.3", "--weights", "0.5,1,1"])
+    w = parse_weights(args.weights)
+    _apply_adapt(args, w)
+    assert args.start == "gradient" and args.clamp_band == 1.0 and args.guide == 0.3
+    assert args.stress_bias == 0.5 and args.strength_first == 3.0
+    assert np.allclose(w, [0.5, 1, 1, 0, 0, 0, 0.5, 2.0])
+    off = build_parser().parse_args(base)
+    w0 = parse_weights(off.weights)
+    _apply_adapt(off, w0)
+    assert off.start is None and off.clamp_band is None and off.guide == 0 and w0[6] == w0[7] == 0

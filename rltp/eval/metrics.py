@@ -3,7 +3,8 @@
 Raw part-level terms (higher is better):
   strength = -log FI_agg over all elements of the part   (p-norm, p ~ 8)
   time     = -sum of layer times (s)
-  cont     = -sum of layer continuity costs
+  cont     = -sum of layer continuity costs: strokes, travel, ends on the part boundary and
+             free ends (path ends no other bead touches, rltp.cover.beads.is_anchored)
   inter    = -log FI_agg over all interface cells (v1.5)
 Each term's change is divided by a scale (Normalizer), then weighted. By default
 the scale is the part's baseline value of the term, so the score is a weighted
@@ -28,6 +29,7 @@ class Continuity:
     n_strokes: int
     travel_cells: float
     n_boundary_ends: int
+    n_free_ends: int = 0
 
 
 def continuity(L: Layer, pc: Pieces, tm: Timing, cfg: ScoreConfig, bnd: np.ndarray) -> Continuity:
@@ -35,8 +37,12 @@ def continuity(L: Layer, pc: Pieces, tm: Timing, cfg: ScoreConfig, bnd: np.ndarr
     ends = end_mask(L) | seam_mask(L)
     nb = int((ends & bnd).sum())
     S = pc.count
-    C = cfg.c_stroke * S + cfg.c_travel * travel + cfg.c_boundary_end * nb
-    return Continuity(C, S, travel, nb)
+    nf = 0
+    if getattr(cfg, "c_free_end", 0.0) > 0:
+        from rltp.cover.beads import free_ends
+        nf = len(free_ends(L, pc))
+    C = cfg.c_stroke * S + cfg.c_travel * travel + cfg.c_boundary_end * nb + getattr(cfg, "c_free_end", 0.0) * nf
+    return Continuity(C, S, travel, nb, nf)
 
 
 @dataclass
@@ -89,7 +95,7 @@ def evaluate_layer(L: Layer, motion: Motion, fea: FEAProblem | None, cfg: ScoreC
     return LayerEval(tm, ct, fr, ends, L.flat_mask)
 
 
-LOG_TERMS = ("strength", "inter")   # -log FI_agg: a change is already a fraction of the current value
+LOG_TERMS = ("strength", "inter", "stiff", "bulk")   # -log of a ratio: a change is already a fraction
 ABS_TERMS = ("infill", "cover")    # already fractions (infill off target; mis-covered share of the part)
 NORM_MODES = ("relative", "std")
 

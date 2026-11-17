@@ -31,8 +31,21 @@ class RandomProposer(Proposer):
     name = "random"
     temp0 = 0.0
     bias = 0.0           # share of proposals placed by local stress (set by the loop)
+    guide = 0.0          # share of proposals turned to the window's best direction (set by the loop)
+    align = 0.0          # share of guided proposals that align a whole region (set by the loop)
+    pack = 0.0           # share of guided proposals that pack a window's lines (set by the loop)
+    gmap = None
+    wmap = None          # rltp.search.guide.WorthMap when pack > 0
 
     def propose(self, part, k, M, w, rng):
+        self.last_guided = False
+        if self.guide > 0 and self.gmap is not None and rng.random() < self.guide:
+            from rltp.search.guide import guided_action
+            a = guided_action(part, k, M, rng, self.gmap, align=self.align,
+                              pack=self.pack if self.wmap is not None else 0.0)
+            if a is not None:
+                self.last_guided = True
+                return a, None
         a = int(sample_valid(M, rng, weights=_weights(self, part, k), bias=self.bias)[0])
         return a, None
 

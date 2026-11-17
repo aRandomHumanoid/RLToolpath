@@ -175,7 +175,8 @@ def test_fine_grid_history_replays(tmp_path):
     assert any(e.get("accepted") for e in hist.events if e.get("type") == "edit")
     write_viewer(tmp_path / "viewer.html", part, hist.events, {})
     data = extract_data((tmp_path / "viewer.html").read_text())
-    assert data["layers"][0]["k"] == 4
+    assert data["layers"][0]["kb"] == 4
+    assert [d["k"] for d in data["layers"]] == list(range(len(part.layers)))   # the layer index
     jsonl = read_history(tmp_path / "history.jsonl")
     for k, L in enumerate(part.layers):
         want = _viewer_nxt(L)
@@ -183,3 +184,72 @@ def test_fine_grid_history_replays(tmp_path):
         assert (nxt == want).all() and seams == L.seam
         _, nxt2, _, _, _ = list(replay_history(jsonl, k, L.n))[-1]
         assert (nxt2 == want).all()
+
+
+def test_viewer_exports_load_cases(run):
+    """Load cases tab: each case's supports and loads, clipped to the part, with its force."""
+    out, part, events = run
+    html = (out / "viewer.html").read_text(encoding="utf-8")
+    assert 'data-tab="loads"' in html
+    (case,) = extract_data(html)["cases"]
+    assert case["kind"] == "primary"
+    (sup,), (ld,) = case["sup"], case["loads"]
+    assert max(x for ring in sup for x, _ in ring) <= 0.4 + 1e-3        # the xmin band, inside the part
+    assert ld["f"] == [10.0, -4.0] and ld["m"] == 0 and 8.5 < ld["at"][0] < 9.05
+
+
+def test_viewer_case_kinds_with_random_edge_cases():
+    poly = Polygon([(0, 0), (9, 0), (9, 3), (3, 3), (3, 7), (0, 7)])
+    mesh = trimesh.creation.extrude_polygon(poly, 0.4)
+    loads = LoadSpec([Region(side="xmin", width=0.4)], [Load2D(Region(side="xmax", width=0.4), (10.0, -4.0))],
+                     random_cases=2, random_moments=2)
+    part = build_part(mesh, PartSpec(Printer(), loads, terms=("strength", "time", "cont")), baseline="concentric")
+    cs = build_viewer_data(part)["cases"]
+    assert [c["kind"] for c in cs] == ["primary", "force", "force", "moment", "moment"]
+    for c in cs[1:]:                    # each random case fixes one edge and loads another
+        assert len(c["sup"]) == 1 and c["sup"][0] and len(c["loads"]) == 1 and c["loads"][0]["poly"]
+    assert all(c["loads"][0]["m"] != 0 and c["loads"][0]["f"] == [0.0, 0.0] for c in cs[3:])
+
+
+def test_fit_mode_viewer_embeds_printed_moves():
+    """--directions path: each fine layer carries its strokes' fitted moves in print order
+    (the moves the G-code prints), every stroke's ends within a cell of its first and last
+    node; class mode carries none."""
+    from rltp.config import ScoreConfig
+    from rltp.cover.beads import runs
+    pr = Printer(walls=1, solid_layers=1, infill=0.4, max_bridge=2.0, cell=0.1, infill_rule="free")
+    g = Point(0, 0).buffer(5.0, quad_segs=64).difference(Point(0, 0).buffer(2.5, quad_segs=64))
+    m = trimesh.creation.extrude_polygon(g, height=0.6)
+    m.apply_translation([5.0, 5.0, 0])
+    loads = LoadSpec([Region(box=[0, 4.0, 2.6, 6.0])], [Load2D(Region(box=[7.4, 4.0, 10.0, 6.0]), (0, -20))])
+    for directions in ("path", "classes"):
+        part = build_part(m, PartSpec(pr, loads, terms=("strength", "time", "cont"),
+                                      score=ScoreConfig(fea_coarsen=2, directions=directions)), baseline="zigzag")
+        data = extract_data(render_html(build_viewer_data(part)))
+        if directions == "classes":
+            assert not any("fp" in d for d in data["layers"])
+            continue
+        for L, ev, d in zip(part.layers, part.evals, data["layers"]):
+            fp = d["fp"]
+            order = ev.timing.order
+            assert len(fp["n"]) == len(order) == len(d["order"])
+            V = np.asarray(fp["v"], float).reshape(-1, 2) / 100
+            assert len(V) == sum(fp["n"])
+            moves = sum(len(runs(L)["poly"][int(pid)][2]) - 1 for pid in order)
+            assert len(V) - len(order) == moves
+            pc = get_pieces(L)
+            off = np.r_[0, np.cumsum(fp["n"])]
+            for i, pid in enumerate(order):
+                cells = pc.cells[pid]
+                r, c = np.divmod(np.asarray([cells[0], cells[-1]]), L.W)
+                P = V[off[i]:off[i + 1]]
+                if pc.is_loop[pid]:     # the seam vertex is where the last and first moves meet:
+                    s = np.array([c[0], r[0]], float)    # the seam node lies on one of them
+                    dist = []
+                    for a, b in ((P[0], P[1]), (P[-2], P[-1])):
+                        t = np.clip(np.dot(s - a, b - a) / max(np.dot(b - a, b - a), 1e-12), 0, 1)
+                        dist.append(np.hypot(*(a + t * (b - a) - s)))
+                    assert min(dist) <= 1.0
+                else:                   # an open stroke's ends are projected onto its first/last move
+                    assert np.hypot(P[0][0] - c[0], P[0][1] - r[0]) <= 1.0
+                    assert np.hypot(P[-1][0] - c[1], P[-1][1] - r[1]) <= 1.0

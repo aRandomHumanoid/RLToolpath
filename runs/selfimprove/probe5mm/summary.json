@@ -1,0 +1,49 @@
+[
+ {
+  "part": "hook",
+  "arm": "ADAPT",
+  "start_obj": 0.0,
+  "final_obj": 23.11,
+  "terms": {
+   "total": 23.110425554887623,
+   "strength": 11.786,
+   "time": -4.555,
+   "cont": 12.844,
+   "inter": -5.492,
+   "infill": -1.268,
+   "cover": -1.791,
+   "stiff": 3.51,
+   "bulk": 8.076
+  },
+  "fi_change_pct": -21.0,
+  "case_change_pct_mean": -15.86,
+  "case_change_pct_worst": 2.67,
+  "dir_changed": 0.1001,
+  "fill_changed": 0.1108,
+  "eff_p2": [
+   0.8966,
+   0.8987
+  ],
+  "eff_p8": [
+   0.3467,
+   0.4069
+  ],
+  "aligned_p2": [
+   0.3648,
+   0.3998
+  ],
+  "wall_p8": [
+   0.1763,
+   0.8224
+  ],
+  "time": [
+   677.7,
+   708.6
+  ],
+  "strokes": [
+   643,
+   649
+  ],
+  "run_min": 14.4
+ }
+]

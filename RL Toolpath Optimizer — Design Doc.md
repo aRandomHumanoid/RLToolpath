@@ -17,7 +17,7 @@ Nov 11, 2026 · @Albert Lin
 **Priorities**
 
 - Good continuity and decent strength come first. The strength term is a relative, theoretical score: it ranks toolpaths for the same part and load against each other, and it is not a calibrated prediction of failure load.
-- Decent strength means holding up under plausible loads, not only the one in `loads.yaml`. Random load cases (see Strength) keep the optimizer from tuning to a single pull.
+- Decent strength means holding up under plausible loads, not only the one in `loads.yaml`. Random load cases (see Strength) keep the optimizer from tuning to a single pull. Since Nov 15, 2026 the aim goes further: slicing a real part should need no loads at all (see Load-agnostic strength).
 - Material constants stay at generic-PLA placeholders. A change in FI\_agg is read as a relative improvement, which holds whatever the exact constants, since bead direction matters through the E1/E2 and strength ratios. Coupon calibration is optional, and the physical milestones (coupons, Z tests, measured strength) are deferred until a part needs absolute numbers.
 
 **Non-goals for v0**
@@ -30,6 +30,7 @@ Nov 11, 2026 · @Albert Lin
 
 ```bash
 rltp baseline part.stl --printer printer.yaml --out out/
+rltp optimize part.stl --printer printer.yaml --out out/        # no loads: 20 random cases
 rltp optimize part.stl --loads loads.yaml --printer printer.yaml \
               --weights 1.0,0.3,0.3 --out out/
 rltp train --config train.yaml --out runs/exp01/   # frozen: 0.4 mm grid only
@@ -225,7 +226,7 @@ Flip can turn one path into a path plus a loop, which is fine because loops are 
 
 ## Shell and infill
 
-Real prints aren't solid. The printer profile sets `walls` (rings of cells along every outline, holes included), `solid_layers` (solid skin near top and bottom surfaces), an `infill` target, and `max_bridge`. With walls 2, solid layers 3 and infill 0.4 (the default `configs/printer.yaml`):
+Real prints aren't solid. The printer profile sets `walls` (rings of cells along every outline, holes included), `solid_layers` (solid skin near top and bottom surfaces), an `infill` target, and `max_bridge`. With walls 2, solid layers 3 and infill 0.4 (the `configs/printer.yaml` defaults until Nov 14, 2026; the defaults are now 1 wall and, since Nov 15, 2 solid layers, with the test parts 5 mm thick instead of 2):
 
 - **Walls.** The outermost 2 rings of each layer's cells (8-neighbor erosion), traced into closed loops where the ring allows. They are locked: no edit may change a wall cell's links, so they print as slicer-style perimeters. Only their seams move. Where a section is too thin for two rings on each side (under about 4 beads between a hole and an edge), the inner ring stays an open path.
 - **Solid skin, per surface.** A cell is solid if any of the 3 layers above or below lacks that cell, so the first and last 3 layers are solid and so is any ledge or step. Walls and solid cells are required: they stay filled.
@@ -308,9 +309,9 @@ On the bracket, the fine-grid optimizer kept the starting directions almost exac
 **Next steps, in order**
 
 1. **Gradient layout step for strength.** The strength term is a smooth function of each cell's fill and bead direction, so it can be optimized as a continuous field before any toolpath exists, the way topology optimization works. One edit costs one solve and gives one number; one adjoint solve gives the gradient over every cell.
-   - **Status (Nov 13, 2026).** Built as `--start gradient` (`rltp/search/fields.py`), since extended with several starts, continuation, ranking by the whole score and a line-end cost. **The exit is met on the bracket:** with the corrected line-end cost, the gradient start plus annealing reaches +56.5 against D's +43.3, with less continuity cost (184 against 199), and in-plane FI\_agg 9.9% below the slicer start against D's 2.8% (see Results with the corrected line-end cost). Before that cost, the best was +42.7 (see Local optima and Where the gap is). One part so far; the line-end price was fitted on it.
+   - **Status (Nov 13, 2026).** Built as `--start gradient` (`rltp/search/fields.py`), since extended with several starts, continuation, ranking by the whole score and a line-end cost. **The exit is met on the bracket:** with the corrected line-end cost, the gradient start plus annealing reaches +56.5 against D's +43.3, with less continuity cost (184 against 199), and in-plane FI\_agg 9.9% below the slicer start against D's 2.8% (see Results with the corrected line-end cost). Before that cost, the best was +42.7 (see Local optima and Where the gap is). **Confirmed on a second part**, a pin-loaded link: +74.9 against +62.5 from the stress start and +57.9 from the slicer start, every gradient chain above every other (see Second part).
    - **Variables.** A bead angle θ for every in-part cell outside the walls, one field shared by every layer, skins included (as the stress start does). A fill ρ ∈ [1 / max\_spacing, 1] for every optional cell, one field shared by the sparse layers, which keeps infill stacked for Z bonding. Walls keep the start layout's stiffness, directions and fill.
-   - **Model.** A cell's stiffness is Σ over layers of h × fill × Q̄(θ), with Q̄(θ) = Tᵀ Q T, the rotation `q_rotate` does. Stiffness is linear in ρ, not ρ³ as first planned: infill lines share the laminate's strain with the skins, so their stiffness adds with their share of the cell (the evaluator resolves each line and agrees), and a partial ρ is printable as line spacing, so it needs no penalty. A cell's share of Σ FI^p is its filled fraction times FI^p. The objective is in-plane FI\_agg on the laminate model over every load case, with the sparse layers' mean fill held at the infill target. On the stress start's layout the model gives 0.9596 against the evaluator's 0.9581.
+   - **Model.** A cell's stiffness is Σ over layers of h × fill × Q̄(θ), with Q̄(θ) = Tᵀ Q T, the rotation `q_rotate` does. Stiffness is linear in ρ, not ρ³ as first planned: infill lines share the laminate's strain with the skins, so their stiffness adds with their share of the cell (the evaluator resolves each line and agrees), and a partial ρ is printable as line spacing, so it needs no penalty. A cell's share of Σ FI^p is its filled fraction times FI^p. The objective is in-plane FI\_agg on the laminate model over every load case, with the sparse layers' mean fill held at the infill target. On the stress start's layout the model gives 0.9596 against the evaluator's 0.9581 (on the link, 0.755 against 0.916: see Second part).
    - **Gradient.** K is symmetric, so the adjoint solve reuses the factorization: one extra solve per load case gives ∂FI\_agg/∂ρ and ∂FI\_agg/∂θ for every cell. Checked against finite differences.
    - **Update.** Optimality criteria for ρ (move limit 0.05) and scaled gradient steps for θ (at most 6° per iteration); both steps halve whenever the objective would rise. θ is parametrized by the doubled-angle vector (cos 2θ, sin 2θ), and both fields pass a Gaussian filter (0.75 mm in the end), which keeps them at the scale of printable areas. ρ starts from the target. The objective is ln FI\_agg, or, given the run's weights, w\_strength × ln FI\_agg plus the line-end cost (below). The first version ran one start, the stress map's principal directions, at the final filter: 46 iterations, 63 solves, 46 s on the bracket. It now runs 8 starts with continuation (Local optima, below), about 100 iterations and 110 s per start, in parallel.
    - **From fields to a layout.** θ rounds to 0/90 per area; areas under 2 × 2 mm take the other direction. `gradient4` adds 45/135 areas of at least 3 × 3 mm. ρ lays infill lines that start and stop with the field: each line has a dither threshold and is laid wherever ρ exceeds it. Every max\_spacing-th line is always laid (the support rule), and the thresholds nest, so a line runs on wherever its surroundings are dense enough. A first version gave each whole line its mean ρ (the layouts' `sweight` route) and lost most of the gain: 0.857 in the field model became 0.928. The field is then shifted until the laid-out infill share hits the target. Annealing handles continuity, time, Z bonding and coverage.
@@ -338,7 +339,13 @@ On the bracket, the fine-grid optimizer kept the starting directions almost exac
        - Against the stress start's 4 chains (S: best +44.0, FI\_agg 3.7% below, Z FI 4.31, 343.9 s, continuity cost 194, 126 strokes) and D (+43.3, 2.8% below, continuity cost 199): every one of the 8 chains beats S's best, and the best is better on every term at once: strength, Z, print time, continuity and coverage (gaps 0.76% against 1.08%, over-extrusion 5.2% against 6.0%).
        - Chains from the second-best field start ended 5–10 points behind those from the best, as in H, so all chains now start from the best (`--chain-starts 1`). ½× and 1× differ by less than the seed spread; 1× stays the default.
        - About 32 minutes per chain with 8 processes running, plus 6 minutes for the field step.
-   - **Next.** Confirm on a second part: the line-end price was fitted on the bracket. How much strength is worth against continuity and time stays the user's call, through the weights.
+   - **Second part (Nov 13, 2026).** A pin-loaded link (`examples/link.stl`): 44 × 12 × 2 mm, the bracket's area, thickness, hole and washer sizes, bolted at one hole and pulled at the other with 120 N at 45° off the axis plus 19 N in z. Three arms, each 4 chains × 4,000 evals from seed 0, scored against the link's slicer start (the README has the table):
+     - Slicer start with plain annealing (A): best +57.9. Stress start with D's guidance (S): +62.5. Gradient start with D's guidance (K, the defaults): +74.9. Every K chain (+73.2 to +74.9) beats every other chain, and K's spread is 1.6 points against 4.8 and 8.2.
+     - K's kept part: in-plane FI\_agg 27.8% below the slicer start (S 17.6%, A 11.6%), Z FI 5.76 (S 5.80, A 8.70), print time equal to the slicer start's, continuity cost 222 (A 194, S 231). It trails A on continuity only.
+     - The gradient start alone scores +39.2 against −11.6 for the stress start, with continuity cost 314 against 414 and the fastest print: the line-end price, fitted on the bracket, carried over.
+   - **The strength term sits on a few cells.** With p = 8 over about 470,000 layer-cells, half of Σ FI^p is in 2 cells on the bracket (the inside corner, in the walls) and 5 on the link (where the clamped washer region ends). The bracket's corner is where it would crack. The link's clamp edge is an artifact of a rigid support region, and about 30% of the link's FI\_agg comes from the cells within 1 mm of the support and load regions. Leaving those out, K's gain holds (21.5% below the slicer start; S 12.8%), while A's mostly goes (2.2%).
+   - **Field model calibration.** On the link's stress start the model gives 0.755 against the evaluator's 0.916. The peak cells hold beads in both directions (line turns next to the hole's walls), which the evaluator scores at the worse one; the model has one angle per cell. On the bracket the peak is in the walls, which the model copies from the start layout, so it matched. The step still found the gain, since starts are ranked by the evaluator.
+   - **Next.** Decide whether FI\_agg should leave out a band around supports and loads: that removes clamp-edge artifacts and leaves the bracket unchanged. Then make `--start gradient` the default start. How much strength is worth against continuity and time stays the user's call, through the weights.
    - **Risks.**
      - Rounding the fields to beads may lose much of the gain. Measured: whole-line densities lost most of it, while dithered lines keep it; the cost moved to continuity.
      - Angle optimization has local minima. Measured with 8 starts: they end within 2.2% of each other after rounding (1.3% with continuation), and the stress map is within 0.1% of the best, so they cost little on the bracket.
@@ -357,6 +364,34 @@ On the bracket, the fine-grid optimizer kept the starting directions almost exac
    - **Exit.** An equal or better final objective at equal evals on the bracket.
 
 **When to bring RL back.** Once the evaluator and the edit set stop changing, a policy could spread search costs across parts. It would need fine-grid observations and the full edit set, with 16× the cells per layer, so training would need the GPU. A lighter option is a learned prior that only biases which cells and edit types annealing proposes. The gradient step may cover much of what a policy would learn about bead directions.
+
+## Load-agnostic strength (Nov 15, 2026)
+
+**Goal.** Slicing a real part should need no loads. "Good strength distribution" means holding up under any plausible load at least as well as a slicer's layout, with no weak direction. The optimizer should also form wall-like structures where the geometry needs them, such as edge-following beads and denser material around holes and narrow sections, instead of relying on more walls.
+
+**What carries over between loads.** Strength only exists relative to a load, so "no loads" means "robust over a spread of plausible loads". Some things hold for nearly any load:
+
+- A free edge carries only stress along the edge, whatever the load, so beads that follow outlines and holes suit every load that leaves that edge free.
+- Holes, inside corners and narrow sections concentrate stress under most loads.
+- Path ends, seams, gaps and weak bonds weaken a part under any load.
+
+Away from the edges no bead direction is best for every load. Under a uniform spread of loads a balanced mix of directions is close to the best, and slicers already lay one. So the gains to expect are at edges and features and from print quality, not from re-orienting the interior.
+
+**Built.**
+
+- No `loads.yaml`: strength over 10 random force and 10 random moment edge cases, none special (`--load-cases`, `--load-moments`). `scripts/suite.py` runs this way unless given `--yaml-loads`.
+- Each case is scored against its own slicer start. With unknown loads their size is unknown too, so each case's relative change is the right measure. The p = 8 mean over cases is a soft worst case.
+- Random edges are drawn as parts are used: round hole : straight side : arc at 3 : 2 : 1, then by length (`--load-weights`).
+- The stress start's map is the cases' consensus, which follows free edges (docs/evaluator.md, Load cases).
+
+**Next: the held-out load test (not built).** Optimize with one seed's random cases and score the result on cases from other seeds that the search never saw, for example 40 cases from seed 1. Gains that carry over are load-agnostic; gains that don't were fitted to those particular loads. Arms with 5, 20 and 40 training cases would show how many are enough. `scripts/rescore.py` needs a load-seed override for the scoring side. This is the measure for every later change aimed at load-agnostic strength.
+
+**Concept: a learned policy from geometry to toolpath.** If the held-out gains hold, loads are only needed in training. A model trained over many random shapes and random loads could then map a part's geometry straight to a toolpath, with no load input and no FEA at slicing time.
+
+- **Output.** The natural output is the gradient step's direction and density fields, predicted instead of optimized, then laid out and tidied by a short anneal. The frozen edit policy (below) is the other route: it proposes edits one at a time against the evaluator.
+- **Training targets.** Either the layouts this pipeline produces (imitation), or the evaluator's score over random loads directly.
+- **Input.** The geometry alone: outline, holes, distance to the edge, section widths, and the layer stack.
+- **Why it might work.** What carries over between loads is mostly geometric (free edges, stress concentrators, narrow sections), which is what such a model can see.
 
 ## Policy and training
 
@@ -556,7 +591,7 @@ Build in this order: each milestone has something printable or measurable before
    - Exit: on test parts, the v1.5 term moves seams and stroke ends off the most loaded interface regions without giving up the in-plane terms. Z-direction coupons that would confirm a real strength change are deferred (see Priorities). v2 waits on them: build it only if coupons fail where v1.5 predicted they'd hold.
 7. **M5b — Search against the evaluator.** The gradient layout step for strength, parallel chains, cheap screening, and learning within the run, in that order (see Search against the evaluator).
    - Exit: on the 0.1 mm bracket, the gradient layout plus annealing beats run D's overall objective with no worse continuity, and parallel chains improve the best result reached per hour of wall-clock time.
-   - Status (Nov 13, 2026): the gradient start (several starts, continuation, ranked by the whole score) plus annealing reaches +42.7 against D's +43.3, ending 10% stronger in-plane than the slicer start against D's 2.8%, with slightly worse continuity (202 against 199) and 9 s more print time, both from infill line ends. Independent parallel chains are built. A first line-end cost in the field step made starts worse (it ignored direction-area boundaries). With the corrected one the gradient start scores +47.3 before annealing and +56.5 after (best of 4 chains), above D's +43.3 with less continuity cost (184 against 199): the first exit is met on the bracket. Next: confirm on a second part, then parallel chains' width against depth.
+   - Status (Nov 13, 2026): the gradient start (several starts, continuation, ranked by the whole score) plus annealing reaches +42.7 against D's +43.3, ending 10% stronger in-plane than the slicer start against D's 2.8%, with slightly worse continuity (202 against 199) and 9 s more print time, both from infill line ends. Independent parallel chains are built. A first line-end cost in the field step made starts worse (it ignored direction-area boundaries). With the corrected one the gradient start scores +47.3 before annealing and +56.5 after (best of 4 chains), above D's +43.3 with less continuity cost (184 against 199): the first exit is met on the bracket. Confirmed on a second part, a pin-loaded link: +74.9 against +62.5 (stress start) and +57.9 (slicer start). Next: whether FI\_agg should leave out a band around supports and loads, then parallel chains' width against depth.
 8. **M6 — Physical validation (deferred).** In-plane tensile and bending coupons, Z tensile and short-beam shear, against slicer defaults and the M2 annealing result. This isn't needed for the current goals (see Priorities); run it only once a part needs absolute strength numbers.
 9. **M7 — v3 dual nozzles.** Owner map, Transfer operator, legality checker with schedule repair, two-stream G-code, dual playback.
    - Exit: the checker flags every collision in a hand-built set of crossing cases, and a dry run with extrusion off and the bed lowered finishes without contact.
@@ -597,7 +632,9 @@ The biggest risk is the lattice: a 4-neighbor grid can only lay beads at 0° and
 - What form of φ(Δt) fits our interlayer coupons?
 - Gradient step: is one fill and direction field shared by every sparse layer enough, or does per-layer freedom pay for the Z bonding it costs?
 - Parallel chains: at equal compute, do many short chains beat one long one?
-- Gradient step: the line-end price (0.057 strokes and 0.025 s per unit of the measure) was fitted on 17 bracket starts, and ½× to 1× worked equally well there. Does it carry to other parts and printers, or should each part fit its own (lay out a few starts, regress)?
+- Gradient step: the line-end price (0.057 strokes and 0.025 s per unit of the measure) was fitted on 17 bracket starts, and ½× to 1× worked equally well there. It carried over to the link unchanged. Does it carry to other printers, or should each part fit its own (lay out a few starts, regress)?
+- Strength aggregate: should FI\_agg leave out a band around supports and loads? On the link about 30% of it comes from the clamp edge, an artifact of rigid support regions; on the bracket the band changes it by 0.1%. Geometric peaks such as the bracket's inside corner are real, but their size depends on the mesh.
 - How much is in-plane strength worth against continuity and print time? At strength weight 0.5, a part 10% stronger in-plane gains about 5 points, about what 15 strokes cost; the weights decide whether the gradient start's extra strength is worth its line ends.
+- Load-agnostic strength: do the optimizer's gains carry over to random loads it never saw (the held-out load test)? Can the optimizer form wall-like structures where the geometry needs them, without extra walls?
 - On hold while the policy is frozen: train on a fixed grid size, or on mixed sizes per batch? Should the policy also choose which layer to edit, replacing the hand-written scheduler?
 - v3: how will the two G-code streams run in sync? That depends on the controller.

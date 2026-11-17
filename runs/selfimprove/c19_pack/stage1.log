@@ -1,0 +1,16 @@
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 182x657 at p=0.1 mm, 788721 cells (676.5s)
+[rltp] gradient start: FI_agg 0.9044 against 1.1206 for the stress start; best of 8 starts by score: 45 (field model 0.8853 -> 0.7305, rounded 0.7371); starts within 8.3% after rounding; 666s
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 788721 of 1379575 cells filled, infill 40.1% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 25 layers, grid 202x442 at p=0.1 mm, 932147 cells (1063.4s)
+[rltp] gradient start: FI_agg 0.9260 against 1.1946 for the stress start; best of 8 starts by score: 0 (field model 0.7221 -> 0.6044, rounded 0.6176); starts within 6.3% after rounding; 1045s
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 932147 of 1652800 cells filled, infill 40.0% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 25 layers, grid 282x402 at p=0.1 mm, 1371975 cells (1608.9s)
+[rltp] gradient start: FI_agg 0.8504 against 1.1772 for the stress start; best of 8 starts by score: 45 (field model 0.6327 -> 0.4559, rounded 0.4900); starts within 5.8% after rounding; 1582s
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 1371975 of 2558800 cells filled, infill 40.1% of the optional cells (target 40%, rule both), 0 unsupported
+part     arm      start   final    FI%  case% worst% dirchg fillchg     eff2 0->1     eff8 0->1        align2         wall8   strokes   min
+frame    ADAPT      0.0    56.4  -31.1  -24.4    0.8  0.099   0.180  0.909->0.922  0.385->0.606  0.436->0.499  0.040->0.595  929->810  156.0
+wrench   ADAPT      0.0    61.7  -15.3  -10.3    4.2  0.144   0.164  0.909->0.906  0.277->0.585  0.397->0.444  0.339->0.923  735->571  122.5
+plate    ADAPT      0.0    69.9  -40.2  -22.7    7.5  0.197   0.142  0.911->0.917  0.364->0.492  0.452->0.491  0.012->0.331 1243->1200 201.8

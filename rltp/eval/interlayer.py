@@ -200,6 +200,8 @@ def eval_zinterface(itf: ZInterface, fill_lo, fill_up, t_lo, ends_lo, T_lo: floa
     m = np.zeros(n)
     for sg, tu in zip(sig, taus):
         f = (np.maximum(sg, 0) / (q * mat.Zt)) ** 2 + (tu / (q * mat.Sz)) ** 2
+        if getattr(bond, "fi", "quadratic") == "ratio":
+            f = np.sqrt(f)
         m += f ** p_norm
     m /= len(sig)
     fi_all[b] = m ** (1 / p_norm)
@@ -215,4 +217,6 @@ def eval_interface(itf: Interface, t_lo, ends_lo, T_lo: float, t_up, ends_up,
     s = np.where(ends_lo[itf.lo] & ends_up[itf.up], bond.s_end, 1.0)
     q = np.maximum(phi * s, bond.q_min)
     fi = (np.maximum(itf.sigma, 0) / (q * mat.Zt)) ** 2 + (itf.tau / (q * mat.Sz)) ** 2
+    if getattr(bond, "fi", "quadratic") == "ratio":
+        fi = np.sqrt(fi)
     return IfaceResult(float(np.sum(fi ** p_norm)), itf.N, fi, q)

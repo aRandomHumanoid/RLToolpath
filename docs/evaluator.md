@@ -1,6 +1,6 @@
 # The evaluator
 
-The evaluator scores a whole part's toolpath. It computes six raw terms, divides each term's
+The evaluator scores a whole part's toolpath. It computes eight raw terms, divides each term's
 change by a scale, and adds them up with the user's weights. Every proposer (annealing,
 greedy, random and the trained policy), the RL environment and the bench call the same two
 methods, `PartState.propose` and `PartState.total`. A score from one of them therefore means
@@ -12,6 +12,7 @@ it is built this way and what was planned, including the v2 3D FEA, which isn't 
 - [Terms at a glance](#terms-at-a-glance)
 - [The weighted score](#the-weighted-score)
 - [Strength](#strength)
+- [Stiffness](#stiffness-stiff-7th-weight)
 - [Print time](#print-time)
 - [Continuity](#continuity)
 - [Interlayer (Z) strength](#interlayer-z-strength)
@@ -39,7 +40,9 @@ is what a term's change is divided by.
 | `cont` | −(sum of layer continuity costs) | baseline continuity cost | its weight is > 0 |
 | `inter` | −log FI\_agg over every interface cell | 1 | its weight is > 0 and the part has more than one layer; sparse parts default to 0.3 |
 | `infill` | −\|infill fraction − target\| | 1 | sparse parts with `infill_rule` `penalty` or `both` |
-| `cover` | −(gaps + over-extrusion) / in-part cells | 1 | fine bead grid (`cell` < `bead_width`) |
+| `cover` | −(gaps + over-extrusion) / in-part cells | 1 | fine bead grid (`cover`'s weight > 0) |
+| `stiff` | −log of the mean over load cases of compliance / the slicer layout's | 1 | its (7th) weight is > 0 |
+| `bulk` | −log of the p = 2 aggregate of FI, each case scaled to its start | 1 | its (8th) weight is > 0 |
 
 A term whose weight is 0 is left out of `spec.terms`. It is not computed, and it reads 0 in
 `raw()`.
@@ -106,8 +109,16 @@ bookkeeping in [rltp/part.py](../rltp/part.py).
   elements, with r = cell / `fea_element`, for the analysis only. Every element takes its
   cell's bead directions and fill. A cell's FI is the p-mean of its elements' FI, and its
   stresses are their mean.
+- **Coarser elements.** A `fea_element` that is a multiple c of the cell merges c×c cells
+  into one element (`coarsen`). The element's stiffness is the mean of its cells' (cells
+  outside the part count 0). Each cell's stress and FI come from its element's centre strain
+  through the cell's own bead directions, so a cell's beads still set its FI. On the 0.1 mm
+  bracket with 21 load cases, 0.4 mm elements cut a proposal from 2.1 s to 0.22 s. Stress
+  peaks come out blunter, so FI\_agg values aren't comparable across element sizes.
 - **Supports.** Nodes inside a support region are fixed in x and y.
 - **Loads.** A load's force is spread evenly over the unsupported nodes inside its region.
+  A load's `moment` (N·mm about +z) is applied as a couple on the same nodes: forces normal
+  to each node's arm from the nodes' centroid, sized by the arm, with no net force.
 - **Z limits.** The `zmin`/`zmax` limits on support and load regions apply in the split model.
   The laminate model ignores them.
 - **Floating islands.** Each free degree of freedom gets 1e-9 × the mean diagonal stiffness,
@@ -125,6 +136,70 @@ the element:
 - **Fine grid** (`beads.cell_wh` and `beads.cell_shares`). The shares come from the deposited
   bead footprints. Once a layer has diagonal runs, they become four shares: 0, 45, 90 and 135
   degrees. The diagonal stiffnesses use the standard Q-bar rotation (`q_rotate`).
+- **Fine grid, true directions** (`--directions path`, `ScoreConfig.directions`; since Nov 16,
+  2026; laminate only). The class shares come from the grid steps, so a bead following a
+  curve, a staircase of x-steps with a y-jog every few cells, holds a little 90-degree
+  material near every jog. A cell then scores at the worse of 0 and 90 degrees, as if the
+  bead were loaded across it, though the strand runs along the curve. Here
+  `cover.paths.node_angles` gives each node its path's direction instead:
+  - **Tangent:** a least-squares line through the nodes within 0.8 mm of path either side.
+  - **Corners:** the fit stops at corners: a turn of more than 30° between least-squares
+    directions over 0.8 mm either side, concentrated at the node, and at least half a bead
+    (0.4 mm of path) from either end: a last grid jog near an end only looks like a turn.
+  - **Accuracy** on rasterised paths: straight lines 0.8° mean error, circles of 1.6–10 mm
+    radius 0.6–1.3° mean, zigzag turns exact; 1 mm radii are the weak spot (~9°).
+
+  A cell's stiffness is exact for any mix of directions. Q-bar is
+  M0 + cos 2a M1 + sin 2a M2 + cos 4a M3 + sin 4a M4 (`fea2d.q_basis`), so each layer gives
+  five per-cell coefficients: thickness × material × the mean of those terms over its
+  covering nodes. Its FI is the worst over the directions its beads hold, quantised to
+  1.4° (`paths.cell_bins`, directions within 2.8° merged). The laminate's layers share
+  their strain, so every (cell, direction) pair any layer holds is scored once per solve
+  (`fea2d.post_layers_path`, a reference-counted table). Cost: about +7% per proposal.
+  The 0.4 mm grid, the dense split model, the field model's walls and the direction
+  guide still use the classes.
+
+  The same mode also prints and deposits along fitted straight segments (`beads.fit_mode`,
+  set on each fine layer by its `PartState`; class mode is unchanged):
+  - **Printed path** (`beads._fit_runs`, `_fit_piece`): each stroke is cut into straight
+    segments.
+    - Each segment is the least-squares line through its nodes, grown greedily while every
+      node stays within 0.1 mm (one cell, a quarter bead) of it. Only the nodes where the
+      path turns are checked, since they are the farthest from any line.
+    - The corners `node_angles` finds always end a segment.
+    - Vertices sit where consecutive lines cross. Near-parallel lines, or lines that would
+      cross far from their shared node, instead get the average of that node's projections
+      onto both. A path end is its node projected onto its line.
+    - So a staircase at any angle, or a 0.1 mm jog, is one move along its true direction:
+      lines laid at the 16 bin angles come out within 0.05°. On circles of 1–10 mm radius,
+      every node stays within 0.1 mm of the printed polyline.
+    - G-code (`export/gcode.py`) and the time model (`timing.time_polylines`) read these
+      polylines from `runs(L)`. A polyline entry carries a third element, its vertices as
+      (column, row) floats.
+  - **Deposit** (`beads._deposit_fit`): each segment lays a band one bead wide, sampled at 16
+    R2 low-discrepancy points per cell. A grid of samples has rows that a band edge at the
+    wrong angle lines up with: ±6% for 3 × 3 at 45°, and 4% for a 13-point lattice at 33.75°.
+    - A path end gets a half-bead cap.
+    - A joint of 90° or less, between segments long enough for it, is mitred at the
+      bisector: covered once, nothing missing. A sharper joint lets both bands stop at the
+      vertex.
+    - A single straight bead is at most 1 per cell. A stroke deposits its length × width
+      plus caps, as its G-code extrudes: lines at any angle within ±0.6%; circles +0.3% at
+      10 mm radius to +3.9% at 1 mm, since the polygon is a little larger.
+    - Shares: each segment's material splits between the two nearest of 0/45/90/135 by
+      angle, so `cell_shares` and the tools built on them keep working.
+  - **Effect** on frame (slicer start / an optimised layout):
+    - moves 11.9k → 4.3k / 17.6k → 8.7k;
+    - print time −9% / −10%: curved walls print smooth, not as staircases of 90° corners;
+    - material −6% / −8%: staircases deposited their Manhattan length plus corner squares;
+    - over-extrusion 3.0% → 0.3% / 5.7% → 1.9% of part cells;
+    - FI_agg on the same optimised layout +0.7% (less material at the walls).
+  - **Wall gaps:** gaps rise 0.7% → 1.6% of part cells, all in the wall bands: a smooth wall
+    half-covers the rasterised outline's staircase corner cells. Skin gaps are unchanged.
+    The walls are locked, so this is a constant in the cover term.
+  - **Cost:** about +15% per proposal against class mode (the true-direction FI table
+    included). Per layer: deposit 20 ms, segment fit 10 ms, corners and tangents 6 ms.
+    Proposals score incrementally (drift 4e-11).
 
 How much stiffness a cell keeps depends on its fill:
 
@@ -157,15 +232,71 @@ interaction term F12 = −½√(F11·F22).
 ```
 
 The sum runs over every layer. With p = 8 the aggregate sits close to the worst cells but
-still responds to edits elsewhere.
+still responds to edits elsewhere. In practice it sits very close: on the 0.1 mm bracket
+half of Σ FI^p is in 2 cells at the inside corner (in the walls), and on the link
+(`examples/link.stl`) in 5 cells where the clamped washer region ends. Corners like the
+bracket's are real stress concentrations whose size depends on the mesh. A clamp edge is
+an artifact of modeling a support as a rigid region, and it carries about 30% of the link's
+FI\_agg (see Known limitations).
+
+**Clamp band (`--clamp-band MM`, off by default).** For each load case, the cells within MM
+of that case's own support and load regions don't count toward its FI (they still count in
+N). Those are the singular ends of a rigid support or a concentrated load: no toolpath can
+change them. With 21 random edge cases (bracket, start), 71% of Σ FI⁸ sat in walls within
+1 mm of a case's own regions, 20% in other wall cells, and 9% in the bead cells edits can
+turn (hook: 81%, 17%, 1%), so without the band the strength term barely saw bead directions.
+The band is computed on the cell grid (a distance transform of each case's regions).
+
+**Bulk strength (`bulk`, 8th weight).** The same per-cell FI, aggregated at p = 2 instead
+of 8, with each case scaled to its own p = 2 aggregate on the slicer layout:
+
+```math
+\mathrm{raw}_{\mathrm{bulk}} = -\log \Big(\frac{1}{N}\sum_{e} \overline{(\mathrm{FI}_{e,c}\, s^{(2)}_c)^2}\Big)^{1/2}
+```
+
+With 2 walls and the band, the walls held 24–52% of Σ FI⁸ at the slicer start and 41–71%
+after `--adapt` (5 test parts): they already run along the edges where stress peaks, and as
+the interior improves the peak sits more and more in them. So under p = 8 the bead directions
+inside matter less and less. With 1 wall (the printer.yaml default since then) the shares
+are 17–41% and 26–63%. p = 2 sees how well every bead suits its loads.
+
+## Stiffness (`stiff`, 7th weight)
+
+Each load case's compliance (the work its loads do, f · u) relative to the slicer layout's,
+averaged over the cases: raw = −log mean\_c(C\_c / C\_c,0). On the laminate it is the plate's;
+in split mode it's summed over the layers. It costs nothing extra (f and u are at hand) and is
+scored incrementally like strength. With the placeholder PLA constants (E1/E2 = 1.27) bead
+direction changes stiffness much less than strength (Xt/Yt = 1.8): the self-improvement
+cycles moved compliance by 0.3–1.9% where FI\_agg moved 2–6%.
 
 ### Load cases
 
-`loads.yaml` can hold extra cases (`load_cases`) and random ones (`random_cases: N` or
-`--load-cases N`). A random case is a disc load, 4 bead widths in radius, on the outline away
-from the supports, pushing in a random direction. It is seeded by `random_seed` or `--load-seed`.
+`loads.yaml` can hold extra cases (`load_cases`) and random ones: `random_cases: N` force
+cases and `random_moments: N` moment cases (`--load-cases N`, `--load-moments N`), seeded by
+`random_seed` or `--load-seed`. `random_mode` (`--load-mode`) picks how they're made:
 
-All cases share one stiffness matrix and are solved as separate right-hand sides. When the
+- **edge** (the default). The footprint's outline is split into edges
+  ([rltp/slicing/edges.py](../rltp/slicing/edges.py)): each contour is cut at corners (a
+  turn over 40°) and where a straight run meets an arc, so the edges are straight sides,
+  arcs and whole round holes. Edges shorter than 2 bead widths are dropped. Each random case
+  fixes one random edge and loads a different one, both as the points within one bead
+  width of their edge. A force case pushes in a uniformly random direction with the primary
+  case's total force (1 N without one); a moment case twists either way by that force × 10 mm.
+  - **Which edges.** Parts are mostly held and loaded at bolt holes and flat faces, so an
+    edge is drawn in two steps: its kind, with odds `random_weights` (`--load-weights`,
+    default 3 : 2 : 1 for round hole : straight side : arc) over the kinds the part has;
+    then an edge of that kind in proportion to its length, so short fillets are rarely
+    picked. The load's edge is drawn the same way from the other edges. `uniform` draws
+    every edge alike with the same random numbers as runs before Nov 15, 2026. On the 5 mm
+    hook, 10 of its 13 edges are arcs, several under 2 mm; drawn alike, most cases held or
+    loaded a fillet.
+- **disc** (the cases of runs before edge mode). A disc load, 4 bead widths in radius, on the
+  outline away from the loads.yaml supports, pushing in a random direction. Force cases only.
+
+Cases that share supports (the primary, `load_cases`, disc cases, and edge cases that fix the
+same edge) share one stiffness matrix and are solved as separate right-hand sides. Each
+other set of supports gets a linear system of its own, with its own factorization, so edge
+cases cost more: up to one system per edge. When the
 part is built, each case's FI\_agg on the starting layout is measured, and its FI is divided
 by that value from then on (`case_scale`). A cell's value is then the p-mean over cases, so
 FI\_agg starts at 1 and a case's force size drops out. The p-norm acts as a soft worst case:
@@ -173,6 +304,20 @@ edits are pushed toward whichever case has fallen furthest behind its start.
 
 The stress outputs (`sx`, `sy`, `txy`), the observations and `--rotate` use case 0, the
 `loads` block. `metrics.json` reports each case's raw FI\_agg as `case_fi_agg`.
+
+**Without a primary case (load-agnostic).** With no `loads` (no `--loads` file, or one with
+only random cases), every case comes from the random draw and none is special. Running
+without a loads file now does this by default, with 10 force and 10 moment cases
+(`--load-cases`/`--load-moments` change it), and `scripts/suite.py` runs this way unless
+given `--yaml-loads`. Dividing each case by its own start is then the right measure: if no
+load is known, neither is its size, so a case that barely stresses the part now could be ten
+times larger in use. The p-norm over cases reads as "no weak direction, and at least as good
+as the slicer under any plausible load". Case 0 is then the first random case. The stress
+start's map ([rltp/eval/stressmap.py](../rltp/eval/stressmap.py)) becomes the cases'
+consensus: per cell, the doubled-angle sum of every case's principal direction, each case
+scaled by its own p = 8 mean. Along a free edge only the edge-tangent stress survives,
+whatever the load, so the map follows the outline there and is weak where the cases
+disagree.
 
 ### Stack models (`--stack`)
 
@@ -200,8 +345,12 @@ The stress outputs (`sx`, `sy`, `txy`), the observations and `--rotate` use case
   factorized afresh.
 - **Speed and reproducibility.** On the bracket, `fast` was 1.7–2.7× faster per solve than
   `legacy` and agreed with it to about 2e-10. `legacy` reproduces older runs bit for bit.
-- **Cache.** In split mode, up to 6 layers keep their problem and factorization (least
+- **Cache.** In split mode, up to 6 layers keep their problem and factorizations (least
   recently used are dropped).
+- **Several load cases.** All the cases in one system run their conjugate gradients on the
+  same preconditioner. With several cases, the laminate's per-layer post-processing only
+  touches each layer's filled cells and the diagonal directions where some layer lays them.
+  That gives the same values up to rounding, and single-case runs are unchanged bit for bit.
 
 ## Print time
 
@@ -232,7 +381,8 @@ Code: `continuity` in [rltp/eval/metrics.py](../rltp/eval/metrics.py).
 
 ```text
 C = c_stroke × strokes + c_travel × travel (in bead widths) + c_boundary_end × boundary ends
-  = 1.0 × strokes + 0.05 × travel + 0.5 × boundary ends      (ScoreConfig defaults)
+    + c_free_end × free ends
+  = 1.0 × strokes + 0.05 × travel + 0.5 × boundary ends + 1.0 × free ends   (ScoreConfig defaults)
 ```
 
 - **Strokes**: each one costs a start, a stop and usually a retraction.
@@ -240,6 +390,27 @@ C = c_stroke × strokes + c_travel × travel (in bead widths) + c_boundary_end �
 - **Boundary ends** are path ends and loop seams on the boundary. On the 0.4 mm grid the
   boundary is the in-part cells next to the outside. On the fine grid it is the edge of the
   region where a bead's footprint fits.
+- **Free ends** are path ends (walls aside) that no other bead touches: no other bead's
+  centreline node within one bead width (Chebyshev, `kb` cells) of the end, the end's own
+  last 2·kb + 1 nodes aside (`free_ends` in [rltp/cover/beads.py](../rltp/cover/beads.py)).
+  Such a bead can't pass load in-plane to the rest of its layer, which the strength model
+  can't see: the laminate bonds every layer perfectly, so a line that touches nothing in its
+  own layer carries load as well as one tied to the wall. `--free-end-cost` sets the cost
+  (0 turns it off). In a full layer every end touches a neighbour, so only sparse layers pay.
+
+The layouts keep their ends anchored (`anchor_end`). A free end is extended the shortest
+way that makes it touch a bead or wall, up to 4 mm:
+- straight on along its line;
+- or, for a straight end, a 90° turn to the nearest bead beside it (a T-joint to the
+  neighbouring infill line).
+
+The starting layouts anchor every free end. In the gradient start an infill line still starts
+and stops with the density field, and its ends get T-joints. `--infill-lines whole` lays each
+run of a line whole instead, by the field's mean along it. On one bracket and one link field
+that cost 5–12% of the start's strength, against 0–1% for T-joints. Window re-lays and stack
+copies anchor the ends they make, and the `anchor` edit anchors one free end. Under `--adapt`
+on the five suite parts (README, cycle 17), free ends per part fell from 38 to 0.2 after
+annealing, with FI_agg unchanged. Without the cost, annealing leaves about 4.
 
 ## Interlayer (Z) strength
 
@@ -256,7 +427,12 @@ s_i  = s_end where both layers have a path end or seam over cell i, else 1
 FI_i = (max(σ_i, 0) / (q_i Zt))² + (τ_i / (q_i Sz))²
 ```
 
-The bond model's defaults are τ = 30 s, n = 2, `s_end` = 0.7 and `q_min` = 0.05. Δt is
+The bond model's defaults are τ = 30 s, n = 2, `s_end` = 0.7 and `q_min` = 0.05. `fi:
+ratio` (`--z-fi ratio`) scores a cell by the square root of FI_i instead: the inverse strength
+ratio, linear in load like the in-plane FI. The quadratic default acts like p = 16 under the
+p = 8 aggregate: a cell where both layers have a path end weighs 0.7⁻¹⁶ ≈ 300 times as much.
+The ratio form cut the Z changes of the same 60 skin re-lays to about a third, with almost
+the same ranking (rank correlation 0.93). Δt is
 measured on the absolute clock, so it depends only on the interface's two layers. On the
 fine grid, a cell's print time is the latest time any bead covering it was laid (`t_mat`).
 
@@ -386,7 +562,7 @@ The RL environment's reward is the accepted gain in the same units.
 | `raw` | the six raw terms |
 | `fi_agg`, `inter_fi_agg` | in-plane and Z FI\_agg (lower is stronger) |
 | `case_fi_agg` | raw FI\_agg per load case (several cases only) |
-| `time_s`, `strokes`, `travel_mm`, `retractions`, `boundary_ends` | time and continuity details |
+| `time_s`, `strokes`, `travel_mm`, `retractions`, `boundary_ends`, `free_ends` | time and continuity details |
 | `layers`, `cells` | layer count and filled cells |
 | `part_cells`, `required_cells`, `infill_pct`, `unsupported` | sparse parts |
 | `bonded_pct`, `weakest_bond_pct` | sparse parts: overlap with the layer below, overall and at the worst interface |
@@ -407,9 +583,9 @@ drift. The viewer's FI channel shows each cell's FI.
 | `norm` | `--norm` | relative | term scales |
 | `stack` | `--stack` | auto | split or laminate stack model |
 | `solver` | `--solver` | fast | FEA linear solver |
-| `fea_element` | printer.yaml, `--fea-element` | 0.1 (printer.yaml) | element size for the strength analysis; 0 = one element per cell |
+| `fea_element` | printer.yaml, `--fea-element` | 0.1 (printer.yaml) | element size for the strength analysis: a fraction of the cell splits it, a multiple merges cells; 0 = one element per cell |
 | `cell` | printer.yaml, `--cell` | 0.1 (printer.yaml) | fine bead grid |
-| load cases | loads.yaml `load_cases`, `random_cases`; `--load-cases`, `--load-seed` | none | extra cases for the strength term |
+| load cases | loads.yaml `load_cases`, `random_cases`, `random_moments`, `random_mode`; `--load-cases`, `--load-moments`, `--load-mode`, `--load-seed` | none; edge mode | extra cases for the strength term |
 | `material` | printer.yaml, or a loads.yaml override | generic PLA | E1, E2, G12, ν12, Xt, Xc, Yt, Yc, S, Zt, Sz |
 | `bond` | printer.yaml, or a loads.yaml override | τ 30, n 2, s\_end 0.7, q\_min 0.05 | bond quality |
 | motion | printer.yaml | see file | the time model |
@@ -417,19 +593,24 @@ drift. The viewer's FI channel shows each cell's FI.
 | `infill`, `infill_rule`, `infill_band`, `infill_weight` | printer.yaml, CLI | 0.4 (printer.yaml), both, 0.02, 1.0 | infill target |
 | `cover_weight` | printer.yaml, CLI | 1.0 | coverage weight |
 | `p_norm`, `c_stroke`, `c_travel`, `c_boundary_end` | `ScoreConfig` (code only) | 8, 1.0, 0.05, 0.5 | aggregate exponent and continuity costs |
+| `c_free_end` | `ScoreConfig`, `--free-end-cost` | 1.0 | cost of a path end no other bead touches |
 
 ## Code map
 
 | File | What it holds |
 | --- | --- |
-| [rltp/config.py](../rltp/config.py) | `TERMS`, `ScoreConfig`, `Material`, `BondModel`, `LoadSpec` (cases, random cases), `parse_weights` |
+| [rltp/config.py](../rltp/config.py) | `TERMS`, `ScoreConfig`, `Material`, `BondModel`, `LoadSpec` (cases, random edge and disc cases, per-case supports), `parse_weights` |
+| [rltp/slicing/edges.py](../rltp/slicing/edges.py) | `outline_edges`: an outline split into straight sides, arcs and round holes |
 | [rltp/eval/metrics.py](../rltp/eval/metrics.py) | `evaluate_layer` (time, continuity and FEA for one layer), `continuity`, `Normalizer`, `full_weights` |
-| [rltp/eval/fea2d.py](../rltp/eval/fea2d.py) | `FEAProblem` (mesh, loads, assembly, solve, post-processing), `tsai_wu_fi`, `q_rotate`, `post_layers` for the laminate |
+| [rltp/eval/fea2d.py](../rltp/eval/fea2d.py) | `FEAProblem` (mesh, loads and moments, one linear system per set of supports, coarsened or refined elements, assembly, solve, post-processing), `tsai_wu_fi`, `q_rotate`, `post_layers` for the laminate |
+| [rltp/search/guide.py](../rltp/search/guide.py) | `DirectionMap`: per cell and bead direction, the weighted score's cost under the current strains; `guided_action` (`--guide`) |
+| [rltp/eval/adapt.py](../rltp/eval/adapt.py) | diagnostics: how far bead directions changed, and how close each cell is to its best direction under the current strains |
 | [rltp/eval/timing.py](../rltp/eval/timing.py) | `time_layer`, `time_polylines`, planner, junction deviation, stroke order |
 | [rltp/eval/interlayer.py](../rltp/eval/interlayer.py) | `Interface` (dense), `ZInterface` (sparse), bond quality, interface FI |
 | [rltp/eval/stressmap.py](../rltp/eval/stressmap.py) | one isotropic solve for the stress-aligned start; not part of the score |
 | [rltp/part.py](../rltp/part.py) | `PartState`: `raw`, `total`, `propose`, `commit`, `full_recheck`, `breakdown`, laminate bookkeeping, infill and coverage terms |
 | [rltp/cover/beads.py](../rltp/cover/beads.py) | fine grid: deposited material and direction shares (`density`, `cell_wh`, `cell_shares`, `cell_fields`) |
+| [rltp/cover/paths.py](../rltp/cover/paths.py) | fine grid, `--directions path`: each node's path direction (`node_angles`), per-cell stiffness moments and direction pairs |
 | [rltp/loop/optimize.py](../rltp/loop/optimize.py) | warmup, temperature unit, acceptance, per-pass recheck |
 | [rltp/search/fields.py](../rltp/search/fields.py) | `FieldModel`: a continuous copy of the laminate strength term (stiffness, Tsai-Wu FI, p-norm aggregate) for the gradient start; not part of the score, but it must follow any change to the strength model |
 
@@ -442,7 +623,8 @@ drift. The viewer's FI channel shows each cell's FI.
 | Solver | `test_warm_start_matches_direct`, `test_refined_mesh_keeps_cell_outputs` |
 | Time model | `test_straight_stroke_time`, `test_planner_respects_limits`, `test_corners_cost_time` |
 | Incremental = full recheck | `test_incremental_matches_full_recheck`, `test_load_cases_incremental_matches_full_recheck`, `test_zbond_is_incremental`, `test_refined_fea_scores_incrementally`, `test_fine_edits_keep_rules_and_score_incrementally` (tests/test_part.py) |
-| Load cases | `test_load_cases_start_at_one_and_keep_the_primary_case`, `test_a_scaled_copy_of_a_case_changes_nothing`, `test_random_cases_are_seeded_and_clear_of_supports` |
+| Load cases | `test_load_cases_start_at_one_and_keep_the_primary_case`, `test_a_scaled_copy_of_a_case_changes_nothing`, `test_random_cases_are_seeded_and_clear_of_supports`, `test_outline_edges_split_at_corners_and_tangent_arcs`, `test_random_edge_cases_fix_one_edge_and_load_another`, `test_random_moment_cases_are_pure_couples`, `test_edge_cases_solve_with_their_own_supports`, `test_edge_cases_incremental_matches_full_recheck` (tests/test_part.py) |
+| Coarse elements | `test_coarse_mesh_keeps_cell_outputs_and_each_cells_beads` (tests/test_eval.py), `test_coarse_fea_scores_incrementally_on_a_fine_grid` (tests/test_part.py), `test_field_gradient_matches_finite_differences` (tests/test_fields.py, with coarsening) |
 | Interlayer | `test_interface_statics_resultants`, `test_bond_quality_falls_with_delay`, `test_zbond_rewards_overlap_between_layers` |
 | Sparse scoring | `test_empty_cells_carry_no_failure_index`, `test_laminate_infill_matters_less_than_split`, `test_penalty_rule_scores_distance_from_target` |
 | Gradient start's copy of the strength term | `test_rotation_and_tsai_wu_match_the_evaluator`, `test_field_model_matches_the_evaluator_on_a_fine_grid` (within 3%), `test_field_gradient_matches_finite_differences` (tests/test_fields.py) |
@@ -475,6 +657,11 @@ drift. The viewer's FI channel shows each cell's FI.
   in-plane, while the Z term models imperfect bonds. Each is a simplification on its own
   axis.
 - **Split model** assumes a prismatic part with an equal share of the load per layer.
+- **Rigid support edges.** A support region fixes every node in it, so the stress is
+  singular where the region ends. On the link about 30% of FI\_agg comes from the cells
+  within 1 mm of the support and load regions; the optimizer can spend effort there that
+  buys no real strength. Compare runs with those cells left out when a support sits in
+  stressed material.
 - **Interlayer statics** are beam theory on a plane section. They are rough near load points,
   holes and abrupt changes in cross-section.
 - **Stroke order** is greedy, not optimized. Time and continuity are scored on that order.

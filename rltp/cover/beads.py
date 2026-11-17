@@ -24,7 +24,22 @@ charges both, since an exact cover by k-wide beads is usually impossible.
 Edits (see ops.py): shift a straight run sideways by one cell, extend or retract a
 path end, join two nearby ends with an L-shaped connector, refill a window with beads
 k cells apart on the row (column) the edit picks, clear a window's optional beads, or
-copy the layer below into a window. Reverse, split and move_seam work as before.
+copy the layer below into a window. Reverse, split and move_seam work as before. Refills
+keep a window's infill share and space its lines evenly; `pack` keeps the share but packs
+the lines where one more unit of infill is worth most (a per-cell map the annealing loop
+puts in L.ctx["worth"], rltp.search.guide.WorthMap), so material can gather where the score
+wants it, e.g. into an edge-following band beside a wall. Without that map it is never valid.
+
+Fit mode (fit_mode; a PartState scoring true bead directions sets it on its layers): strokes
+print as straight segments fitted within FIT_TOL_MM of their nodes (_fit_runs) instead of
+axis runs and 45-degree staircases, and material is deposited along those segments
+(_deposit_fit: one bead wide, half-bead end caps, mitred joints), so a staircase at any angle
+is one straight bead in the G-code, the time model and the material alike.
+
+Anchoring: a path end is anchored when another bead touches it (is_anchored), so the
+bead can pass load in-plane to the rest of the layer; the continuity term charges each
+free end. `anchor` extends a free end along its line until it touches a bead or wall;
+the starting layouts and every window re-lay anchor the ends they make.
 """
 from __future__ import annotations
 
@@ -33,12 +48,15 @@ from scipy import ndimage
 
 from rltp.cover.baselines import link_ring, zigzag_links
 from rltp.cover.cover import (
-    adjacent, bead_weights, fix_seams_local, is_end, join_ends, link, neighbors4, normalize_seams, stroke_cells,
-    unlink_cell,
+    adjacent, bead_weights, fix_seams_local, get_pieces, is_end, join_ends, link, neighbors4, normalize_seams,
+    stroke_cells, unlink_cell,
 )
 from rltp.model import Frame, Layer
 
 WINDOW = 16          # fine-edit window side, cells
+ANCHOR_REACH = 40    # cells: how far anchoring extends a free path end (4 mm on the 0.1 mm grid)
+ANCHOR_TURNS = True  # anchoring may also turn 90 degrees to the nearest bead beside the line (a T-joint)
+INFILL_LINES = ("cut", "whole")   # gradient layouts: lines start and stop with the field, or each run whole
 
 
 class FineEditError(Exception):
@@ -71,6 +89,132 @@ def cover_sum(nodes: np.ndarray, k: int) -> np.ndarray:
 DIAG_MIN = 6         # alternating one-cell steps (same signs) that make a diagonal run
 
 
+FIT_TOL_MM = 0.1     # fit mode: a printed segment passes within this of every node it replaces
+
+
+def fit_mode(L: Layer) -> bool:
+    """Whether the layer prints (and deposits) along fitted straight segments: set by a
+    PartState scoring true bead directions (ScoreConfig.directions = "path")."""
+    return bool(L.aux) and bool(L.aux.get("fit"))
+
+
+def _ls_line(S: np.ndarray, s: int, e: int, x: np.ndarray, y: np.ndarray):
+    """Least-squares line through points s..e (prefix sums S of 1, x, y, xx, yy, xy):
+    (centroid (2,), unit direction (2,) pointing from s to e)."""
+    t = S[e + 1] - S[s]
+    m = t[0]
+    mx, my = t[1] / m, t[2] / m
+    cxx, cyy, cxy = t[3] / m - mx * mx, t[4] / m - my * my, t[5] / m - mx * my
+    phi = 0.5 * np.arctan2(2 * cxy, cxx - cyy)
+    u = np.array([np.cos(phi), np.sin(phi)])
+    if u[0] * (x[e] - x[s]) + u[1] * (y[e] - y[s]) < 0:
+        u = -u
+    return np.array([mx, my]), u
+
+
+def _fit_ok(S, s, e, x, y, pts, tol) -> bool:
+    """Every point of `pts` (positions s..e) within tol of the least-squares line s..e."""
+    c, u = _ls_line(S, s, e, x, y)
+    return bool(np.abs((x[pts] - c[0]) * u[1] - (y[pts] - c[1]) * u[0]).max() <= tol)
+
+
+def _fit_piece(x: np.ndarray, y: np.ndarray, cand: np.ndarray, fixed: np.ndarray, loop: bool, tol: float):
+    """Segment bounds (positions) and vertex coordinates of one stroke (points x, y; a loop's
+    last point repeats its first). Between fixed vertices, each segment grows greedily over
+    the candidate vertices (galloping search) while the least-squares line through its
+    points stays within tol of every candidate (the points where the path turns: the
+    farthest from any line between them). Vertices: where consecutive lines meet, or the
+    shared point's projection onto both, averaged, where they run nearly parallel or would
+    meet far from it; a path end's point projected onto its line."""
+    n = len(x)
+    S = np.zeros((n + 1, 6))
+    S[1:] = np.cumsum(np.stack([np.ones(n), x, y, x * x, y * y, x * y], 1), 0)
+    bounds = [0]
+    for a, b in zip(fixed[:-1], fixed[1:]):
+        s = a
+        while s < b:
+            i0 = int(np.searchsorted(cand, s))             # cand[i0] == s
+            cs = cand[i0 + 1:int(np.searchsorted(cand, b, "right"))]
+            lo, hi = 0, 1                      # cs[0] always fits: the path is straight up to it
+            while hi < len(cs):
+                if not _fit_ok(S, s, int(cs[hi]), x, y, cand[i0:i0 + hi + 2], tol):
+                    break
+                lo, hi = hi, min(2 * hi, len(cs))
+                if lo == len(cs) - 1:
+                    break
+            hi = min(hi, len(cs))
+            while hi - lo > 1:
+                mid = (lo + hi) // 2
+                if _fit_ok(S, s, int(cs[mid]), x, y, cand[i0:i0 + mid + 2], tol):
+                    lo = mid
+                else:
+                    hi = mid
+            s = int(cs[lo])
+            bounds.append(s)
+    lines = [_ls_line(S, s, e, x, y) for s, e in zip(bounds[:-1], bounds[1:])]
+    m = len(lines)
+    P = np.stack([x, y], 1)
+    seg_len = np.hypot(*(P[bounds[1:]] - P[bounds[:-1]]).T)
+
+    def proj(i, j):
+        c, u = lines[i]
+        return c + ((P[j] - c) @ u) * u
+
+    V = np.zeros((m + 1, 2))
+    for j in range(m + 1):
+        if j in (0, m) and not loop:
+            V[j] = proj(0 if j == 0 else m - 1, bounds[j])
+            continue
+        i0, i1 = (j - 1) % m, j % m
+        b = bounds[j]
+        (c0, u0), (c1, u1) = lines[i0], lines[i1]
+        det = u0[0] * u1[1] - u0[1] * u1[0]
+        X = None
+        if abs(det) > 0.09:                    # lines more than ~5 degrees apart: their crossing,
+            d = c1 - c0                        # unless far off (a jog between near-parallel lines)
+            X = c0 + (d[0] * u1[1] - d[1] * u1[0]) / det * u0
+            if np.hypot(*(X - P[b])) > max(2 * tol, 0.3 * min(seg_len[i0], seg_len[i1])):
+                X = None
+        V[j] = X if X is not None else 0.5 * (proj(i0, b) + proj(i1, b))
+    if loop:
+        V[m] = V[0]
+    return np.asarray(bounds, np.int64), V
+
+
+def _fit_runs(L: Layer) -> dict:
+    """runs() in fit mode: each stroke's polyline is straight segments, each the
+    least-squares line through its nodes within FIT_TOL_MM of every one (_fit_piece), so a
+    staircase at any angle or a 0.1 mm jog prints as one move along its true direction. The
+    corners the direction fit finds (rltp.cover.paths.node_corners) end segments. Polylines
+    are (vertex nodes: each segment's first and last node, segment of each link, vertex
+    coordinates (m + 1, 2) as (column, row) in node units, floats). No diagonal runs:
+    _deposit_fit lays every segment itself."""
+    from rltp.cover.cover import get_pieces
+    from rltp.cover.paths import node_corners
+    W, n = L.W, L.n
+    tol = FIT_TOL_MM / L.frame.p
+    pc = get_pieces(L)
+    corner = node_corners(L)
+    poly = {}
+    for pid, cells in enumerate(pc.cells):
+        seq = np.asarray(cells, np.int64)
+        loop = bool(pc.is_loop[pid]) and len(seq) > 1
+        full = np.append(seq, seq[0]) if loop else seq
+        nl = len(full) - 1
+        r, c = np.divmod(full, W)
+        if nl <= 0:
+            poly[pid] = (full.copy(), np.zeros(0, np.int64), np.array([[c[0], r[0]]], float))
+            continue
+        st = np.diff(full)
+        forced = np.flatnonzero(corner[full[1:-1]]) + 1
+        cand = np.union1d(np.r_[0, np.flatnonzero(st[1:] != st[:-1]) + 1, nl], forced)
+        fixed = np.union1d([0, nl], forced)
+        bounds, V = _fit_piece(c.astype(float), r.astype(float), cand, fixed, loop, tol)
+        poly[pid] = (full[bounds], np.repeat(np.arange(len(bounds) - 1), np.diff(bounds)), V)
+    z = np.zeros(n, bool)
+    return {"diag": [], "xr": z, "xd": z, "dnode": z, "poly": poly}
+
+
 def runs(L: Layer) -> dict:
     """Diagonal runs and polylines of a fine layer (cached).
 
@@ -80,9 +224,13 @@ def runs(L: Layer) -> dict:
     "xr": node has its link to the right inside a diagonal run, "xd": same for its link
     down, "dnode": node touches a diagonal link, "poly": {piece: (vertex nodes, segment
     of each link)}} where a polyline merges straight axis runs and each diagonal run into
-    single segments (what the G-code and the time model print)."""
+    single segments (what the G-code and the time model print). In fit mode the polylines
+    are fitted segments at any angle instead (_fit_runs)."""
     R = L._cache.get("runs")
     if R is not None:
+        return R
+    if fit_mode(L):
+        R = L._cache["runs"] = _fit_runs(L)
         return R
     from rltp.cover.cover import get_pieces
     W, n = L.W, L.n
@@ -248,10 +396,132 @@ def _deposit(L: Layer) -> tuple[np.ndarray, np.ndarray]:
     return D, ax
 
 
+SAMPLES = (1 / 6, 0.5, 5 / 6)   # 3 x 3 sample points per cell for diagonal runs (class mode)
+# fit mode: 16 points per cell from the R2 low-discrepancy sequence, which has no rows of
+# samples for a band edge to line up with (a 3 x 3 grid's points sit on 45-degree lines 0.24
+# cells apart: a 45-degree band 4 cells wide caught 16 or 17 of them, +-6%; lattices have such
+# rows too, e.g. 13 points with generator 5 along 33.7 and 123.7 degrees, on two line bins)
+FIT_SAMPLES = tuple(((0.5 + i * 0.7548776662466927) % 1.0, (0.5 + i * 0.5698402909980532) % 1.0)
+                    for i in range(1, 17))
+
+
+def _deposit_fit(L: Layer) -> tuple[np.ndarray, np.ndarray]:
+    """_deposit in fit mode: each segment of runs(L)["poly"] lays a band one bead wide along
+    its straight line, half a bead past a path end; at a joint turning 90 degrees or less
+    between segments long enough for it, the two bands meet at the bisector (a mitre, so
+    the joint is covered once with nothing missing), else both stop at the vertex. Every
+    cell under one straight bead gets exactly 1 and a stroke deposits its length x width
+    plus half-bead caps, as its G-code extrudes. A lone node lays a k x k dab. Direction
+    shares: each segment's material split between the two nearest of 0/45/90/135 degrees
+    by angle; along x: cos^2 of its angle."""
+    from rltp.cover.cover import get_pieces
+    k, H, W = L.kb, L.H, L.W
+    h = k // 2
+    pc = get_pieces(L)
+    poly = runs(L)["poly"]
+    segs = []                 # per piece: P (m, 2), u, length, start/end normals and flags
+    lone = np.zeros(L.n, bool)
+    for pid, cells in enumerate(pc.cells):
+        if len(cells) == 1:
+            lone[cells[0]] = True
+            continue
+        xy = poly[pid][2] + 1.0                   # node (r, c) sits at (c + 1, r + 1), cell units
+        d = np.diff(xy, axis=0)
+        ln = np.hypot(d[:, 0], d[:, 1])
+        tiny = ln < 1e-6                          # coinciding fitted vertices: lays nothing
+        u = d / np.where(tiny, 1.0, ln)[:, None]
+        u[tiny] = (1.0, 0.0)
+        m = len(u)
+        loop = bool(pc.is_loop[pid])
+        uin = np.vstack([u[-1:] if loop else u[:1], u])          # into vertex j: u[j-1]
+        uout = np.vstack([u, u[:1] if loop else u[-1:]])         # out of vertex j: u[j]
+        s = uin + uout
+        sn = np.hypot(s[:, 0], s[:, 1])
+        cos = (uin * uout).sum(1)
+        t = h * np.sqrt(np.clip((1 - cos) / np.maximum(1 + cos, 1e-12), 0, None))   # h tan(turn / 2)
+        lin = np.r_[ln[-1:] if loop else [np.inf], ln]
+        lout = np.r_[ln, ln[:1] if loop else [np.inf]]
+        mitre = (cos >= -1e-12) & (sn > 1e-9) & (lin >= 2 * t) & (lout >= 2 * t)
+        mitre &= ~np.r_[tiny[-1:] if loop else [False], tiny] & ~np.r_[tiny, tiny[:1] if loop else [False]]
+        if not loop:
+            mitre[0] = mitre[-1] = False
+        nrm = s / np.maximum(sn, 1e-12)[:, None]
+        end = np.zeros(m + 1, bool)
+        if not loop:
+            end[0] = end[-1] = True
+        segs.append((xy[:-1], xy[1:], u, ln, nrm[:-1], mitre[:-1], end[:-1], nrm[1:], mitre[1:], end[1:], ~tiny))
+    D = np.zeros(L.n)
+    ax = np.zeros(L.n)
+    sh = np.zeros((4, L.n))           # 0, 45, 90, 135 degrees
+    if segs:
+        *arrs, real = (np.concatenate(x) for x in zip(*segs))
+        P, Q, u, ln, nA, mA, eA, nB, mB, eB = (a[real] for a in arrs)
+        S = len(ln)
+        a0 = np.where(eA | mA, -h, 0.0)                     # a mitre reaches h tan(turn / 2) <= h past
+        a1 = ln + np.where(eB | mB, h, 0.0)                 # its vertex; the bisector cuts it there
+        sw = np.abs(u[:, 1]) > np.abs(u[:, 0])               # y-major: work with x and y swapped
+
+        def swp(a):
+            return np.where(sw[:, None], a[:, ::-1], a)
+        Ps, Qs, us, nAs, nBs = swp(P), swp(Q), swp(u), swp(nA), swp(nB)
+        vs = np.stack([-us[:, 1], us[:, 0]], 1)
+        cx = np.stack([Ps[:, 0] + a * us[:, 0] + sg * h * vs[:, 0] for a in (a0, a1) for sg in (-1, 1)], 1)
+        c0 = np.floor(cx.min(1)).astype(np.int64)
+        ncol = np.ceil(cx.max(1)).astype(np.int64) - c0
+        seg = np.repeat(np.arange(S), ncol)
+        col = c0[seg] + np.arange(seg.size) - np.repeat(np.cumsum(ncol) - ncol, ncol)
+        slope = us[seg, 1] / us[seg, 0]
+        y0 = Ps[seg, 1] + (col - Ps[seg, 0]) * slope
+        half = h / np.abs(us[seg, 0])
+        rlo = np.floor(np.minimum(y0, y0 + slope) - half).astype(np.int64)
+        M = int(np.ceil(2 * h * np.sqrt(2) + 2)) + 1
+        row = rlo[:, None] + np.arange(M)[None, :]
+        frac = np.zeros(row.shape)
+        px, py = Ps[seg, 0][:, None], Ps[seg, 1][:, None]
+        ux, uy = us[seg, 0][:, None], us[seg, 1][:, None]
+        lo_, hi_ = a0[seg][:, None], a1[seg][:, None]
+        ma, mb = mA[seg][:, None], mB[seg][:, None]
+        qx, qy = Qs[seg, 0][:, None], Qs[seg, 1][:, None]
+        nax, nay = nAs[seg, 0][:, None], nAs[seg, 1][:, None]
+        nbx, nby = nBs[seg, 0][:, None], nBs[seg, 1][:, None]
+        for o1, o2 in FIT_SAMPLES:
+            # (o1, o2) along (x, y); a swapped segment's frame has them the other way round
+            X = col[:, None] + np.where(sw[seg], o2, o1)[:, None]
+            Y = row + np.where(sw[seg], o1, o2)[:, None]
+            dx, dy = X - px, Y - py
+            along = dx * ux + dy * uy
+            ok = (np.abs(dx * uy - dy * ux) <= h) & (along >= lo_) & (along <= hi_)
+            ok &= ~ma | ((X - px) * nax + (Y - py) * nay >= 0)
+            ok &= ~mb | ((X - qx) * nbx + (Y - qy) * nby < 0)
+            frac += ok
+        frac /= len(FIT_SAMPLES)
+        cc = np.where(sw[seg][:, None], row, col[:, None])
+        rr = np.where(sw[seg][:, None], col[:, None], row)
+        keep = (frac > 0) & (rr >= 0) & (rr < H) & (cc >= 0) & (cc < W)
+        idx = (rr * W + cc)[keep]
+        f = frac[keep]
+        sid = np.broadcast_to(seg[:, None], frac.shape)[keep]
+        ang = np.arctan2(u[:, 1], u[:, 0]) % np.pi
+        tq = ang / (np.pi / 4)
+        i0 = np.floor(tq).astype(np.int64) % 4
+        w1 = tq - np.floor(tq)
+        D = np.bincount(idx, f, L.n)
+        ax = np.bincount(idx, f * np.cos(ang)[sid] ** 2, L.n)
+        for j in range(4):
+            wj = np.where(i0 == j, 1 - w1, 0.0) + np.where((i0 + 1) % 4 == j, w1, 0.0)
+            sh[j] = np.bincount(idx, f * wj[sid], L.n)
+    D, ax, sh = D.reshape(H, W), ax.reshape(H, W), sh.reshape(4, H, W)
+    dab = cover_sum(lone.reshape(H, W), k)
+    D = D + dab
+    ax = ax + 0.5 * dab
+    L._cache["shares_raw"] = (sh[0] + 0.5 * dab, sh[2] + 0.5 * dab, sh[1], sh[3])
+    return D, ax
+
+
 def density(L: Layer) -> np.ndarray:
     D = L._cache.get("density")
     if D is None:
-        D, ax = _deposit(L)
+        D, ax = _deposit_fit(L) if fit_mode(L) else _deposit(L)
         L._cache["density"] = D
         L._cache["along_x"] = ax
     return D
@@ -284,9 +554,9 @@ def node_frame(mframe: Frame, k: int) -> Frame:
 
 def cell_shares(L: Layer) -> np.ndarray | None:
     """(n, 4) shares of each cell's material laid at 0, 45, 90, 135 degrees, or None when
-    the layer has no diagonal runs (then cell_wh says it all)."""
+    the layer has no diagonal runs (then cell_wh says it all). Fit mode always gives them."""
     D = density(L)
-    if not runs(L)["diag"]:
+    if not runs(L)["diag"] and not fit_mode(L):
         return None
     s0, s90, s45, s135 = L._cache["shares_raw"]
     Dz = np.where(D > 0, D, 1.0)
@@ -319,21 +589,52 @@ def cell_fields(L: Layer, timing) -> dict:
 
 # ------------------------------------------------------------------ lines at 0, 45, 90, 135 degrees
 
-def line_set(sel: np.ndarray, cls: int, k: int, anchor: tuple, dens: float, spacing: int,
-             fill_map: np.ndarray | None = None) -> np.ndarray:
+def line_set(sel: np.ndarray, cls, k: int, anchor: tuple, dens: float, spacing: int,
+             fill_map: np.ndarray | None = None, lines: str = "cut") -> np.ndarray:
+    """_line_set; at the in-between angles (not 0/45/90/135), without the line pieces shorter
+    than a bead width (k nodes), which a line clipping an area's corner leaves as dabs."""
+    out = _line_set(sel, cls, k, anchor, dens, spacing, fill_map, lines)
+    if cls not in (0, 45, 90, 135) and out.any():
+        lab, n = ndimage.label(out)
+        size = np.bincount(lab.reshape(-1), minlength=n + 1)
+        size[0] = k
+        out &= (size >= k)[lab]
+    return out
+
+
+def _line_set(sel: np.ndarray, cls, k: int, anchor: tuple, dens: float, spacing: int,
+              fill_map: np.ndarray | None = None, lines: str = "cut") -> np.ndarray:
     """Nodes of `sel` on parallel bead lines of class `cls` degrees, one bead apart
     (perpendicular), through `anchor` (r, c); with dens < 1 a share of the lines picked by
     error diffusion (never more than `spacing` lines apart), or with `fill_map` each line
-    laid wherever the field exceeds its dither threshold (shell.dither_ranks). A 45-degree
+    laid wherever the field exceeds its dither threshold (shell.dither_ranks; `lines`
+    "whole": each run of a line laid whole where the field's mean over it does, whole_runs).
+    A 45-degree
     line is the staircase c - r in {d, d + 1}; lines sit k*sqrt(2) apart in d (alternating
-    6 and 5 for k = 4), so their perpendicular spacing averages exactly one bead."""
+    6 and 5 for k = 4), so their perpendicular spacing averages exactly one bead. Any other
+    angle (fit mode: multiples of 11.25 degrees, LINE_BINS) lays standard digital lines: the
+    nodes whose coordinate across the line lies within |cos| + |sin| of it (4-connected,
+    never 4-adjacent to the next line), lines exactly one bead apart across."""
     from rltp.cover.shell import dither_ranks, line_picks
     H, W = sel.shape
     if not sel.any():
         return np.zeros_like(sel)
     rr, cc = np.mgrid[0:H, 0:W]
     ar, ac = anchor
-    if cls in (0, 90):
+    if cls not in (0, 45, 90, 135):
+        t = np.radians(float(cls))
+        ux, uy = np.cos(t), np.sin(t)
+        om = abs(ux) + abs(uy)
+        q = (rr - ar) * ux - (cc - ac) * uy + om / 2         # across the line, from the anchor's
+        m = np.floor(q / k).astype(np.int64)
+        within = q - m * k < om
+        if not (sel & within).any():
+            return np.zeros_like(sel)
+        j0, j1 = int(m[sel & within].min()), int(m[sel & within].max())
+        P = np.arange(j0, j1 + 1)
+        lid = np.where(within & (m >= j0) & (m <= j1), m - j0, -1)
+        ok = lid >= 0
+    elif cls in (0, 90):
         key = rr if cls == 0 else cc
         a0 = ar if cls == 0 else ac
         P = np.arange(a0 % k, H if cls == 0 else W, k)
@@ -348,19 +649,38 @@ def line_set(sel: np.ndarray, cls: int, k: int, anchor: tuple, dens: float, spac
         j1 = int(np.ceil((hi_ - d0) / step)) + 1
         P = np.array([d0 + int(round(j * step)) for j in range(j0, j1 + 1)])
         width = 1
-    idx = np.searchsorted(P, key, "right") - 1
-    ok = (idx >= 0) & (key - P[np.clip(idx, 0, len(P) - 1)] <= width)
-    lid = np.where(ok, idx, -1)
+    if cls in (0, 45, 90, 135):
+        idx = np.searchsorted(P, key, "right") - 1
+        ok = (idx >= 0) & (key - P[np.clip(idx, 0, len(P) - 1)] <= width)
+        lid = np.where(ok, idx, -1)
     on = sel & ok
     counts = np.bincount(lid[on], minlength=len(P))
     if dens >= 1.0:
         pick = counts > 0
     elif fill_map is not None:
-        rank = dither_ranks(len(P), spacing, j0)
-        return on & (fill_map > rank[np.clip(lid, 0, len(P) - 1)])
+        rank = dither_ranks(len(P), spacing, j0)[np.clip(lid, 0, len(P) - 1)]
+        return whole_runs(on, fill_map, rank) if lines == "whole" else on & (fill_map > rank)
     else:
         pick = line_picks(counts, dens, spacing)
     return on & pick[np.clip(lid, 0, len(P) - 1)]
+
+
+def whole_runs(cand: np.ndarray, fill_map: np.ndarray, thr: np.ndarray,
+               structure: np.ndarray | None = None) -> np.ndarray:
+    """The runs of `cand` (bead-line nodes) whose mean `fill_map` exceeds their mean
+    threshold `thr` (per node, the line's dither rank). Each infill line is laid whole
+    between walls and other areas, or not at all, instead of starting and stopping wherever
+    the field crosses its threshold, which leaves pieces that touch nothing in their layer.
+    A run is a 4-connected piece of `cand` (fine grid: lines are never 4-adjacent), or a
+    piece under `structure` (e.g. along rows only, where lines are adjacent)."""
+    lab, n = ndimage.label(cand, structure)
+    if n == 0:
+        return np.zeros_like(cand)
+    idx = lab[cand]
+    cnt = np.maximum(np.bincount(idx, minlength=n + 1), 1)
+    keep = np.bincount(idx, fill_map[cand], minlength=n + 1) / cnt >         np.bincount(idx, thr[cand], minlength=n + 1) / cnt
+    keep[0] = False
+    return keep[lab]
 
 
 def diag_links(L: Layer, nodes: np.ndarray, cls: int) -> None:
@@ -390,11 +710,35 @@ def diag_links(L: Layer, nodes: np.ndarray, cls: int) -> None:
                 link(L, x, y)
 
 
-def link_lines(L: Layer, nodes: np.ndarray, cls: int) -> None:
+LINE_BINS = 16       # fit mode: bead lines at multiples of 180 / 16 = 11.25 degrees
+BIN_DEG = 180.0 / LINE_BINS
+
+
+def angle_links(L: Layer, nodes: np.ndarray, deg: float) -> None:
+    """Link the lines at `deg` degrees in `nodes` (all unlinked, line_set's standard digital
+    lines): each 4-connected piece in order along the line (lines are never 4-adjacent)."""
+    W = L.W
+    lab, n = ndimage.label(nodes)
+    if n == 0:
+        return
+    idx = np.flatnonzero(nodes.reshape(-1))
+    r, c = np.divmod(idx, W)
+    t = np.radians(float(deg))
+    li = lab.reshape(-1)[idx]
+    order = np.lexsort((c * np.cos(t) + r * np.sin(t), li))
+    idx, li = idx[order].tolist(), li[order].tolist()
+    for x, y, a, b in zip(idx[:-1], idx[1:], li[:-1], li[1:]):
+        if a == b and adjacent(x, y, W) and L.nxt[x] == -1 and L.prv[y] == -1:
+            link(L, x, y)
+
+
+def link_lines(L: Layer, nodes: np.ndarray, cls) -> None:
     if cls in (0, 90):
-        zigzag_links(L, nodes, cls)
+        zigzag_links(L, nodes, int(cls))
+    elif cls in (45, 135):
+        diag_links(L, nodes, int(cls))
     else:
-        diag_links(L, nodes, cls)
+        angle_links(L, nodes, cls)
 
 
 # ------------------------------------------------------------------ starting layout
@@ -407,17 +751,21 @@ def _erode(m: np.ndarray, n: int) -> np.ndarray:
 
 def fine_layout(L: Layer, part: np.ndarray, solid: np.ndarray, walls: int, density_: float, angle: int,
                 line_angle: int, max_spacing: int, k: int, orient: np.ndarray | None = None,
-                sweight: np.ndarray | None = None, fill_map: np.ndarray | None = None) -> Layer:
+                sweight: np.ndarray | None = None, fill_map: np.ndarray | None = None,
+                lines: str = "cut") -> Layer:
     """Walls as locked loops k cells apart along the true outline, solid skin as beads k
     cells apart, infill lines picked by error diffusion over bead rows (max_spacing in
     beads apart), connected where ends meet. With `orient` (True where beads should run
     along y, or a class per cell: 0, 45, 90, 135 degrees) skin and infill follow it instead
     of `angle`/`line_angle`, and `sweight` (relative stress per cell) packs infill lines
     where stress is high. `fill_map` (per cell, the gradient layout's density field) sets
-    each line's density instead of `density_`."""
+    each line's density instead of `density_`: lines start and stop with the field, or with
+    `lines` "whole" each run of a line is laid whole or not at all (whole_runs). Free path
+    ends are then anchored (anchor_ends): straight on, or a T-joint to the next line."""
     from rltp.cover.shell import close_ring, dither_ranks, line_picks, row_density
     H, W = part.shape
     lo, hi = offsets(k)
+    fit = fit_mode(L)                                      # kept: set by the layer's PartState
     region = box_sum(part, lo, hi) >= k * k - 0.5          # footprint inside the part
     L.kb = k
     L.part = part
@@ -452,9 +800,11 @@ def fine_layout(L: Layer, part: np.ndarray, solid: np.ndarray, walls: int, densi
             bead_rows = np.arange(ph, H, k)
             sub = sel[bead_rows]
             out = np.zeros_like(sel)
-            if fill_map is not None and dens < 1.0:     # lines start and stop with the field
-                out[bead_rows] = sub & (fill_map[bead_rows] > dither_ranks(len(bead_rows), max_spacing)[:, None])
-                return out
+            if fill_map is not None and dens < 1.0:     # each run whole, by the field's mean along it
+                out[bead_rows] = sub
+                thr = np.zeros(sel.shape)
+                thr[bead_rows] = dither_ranks(len(bead_rows), max_spacing)[:, None]
+                return whole_runs(out, fill_map, thr) if lines == "whole" else out & (fill_map > thr)
             d = row_density(sub, dens, None if sweight is None else sweight[bead_rows], max_spacing, 0)
             pick = bead_rows[line_picks(sub.sum(1), d, max_spacing)]
             out[pick] = sel[pick]
@@ -464,8 +814,10 @@ def fine_layout(L: Layer, part: np.ndarray, solid: np.ndarray, walls: int, densi
             sub = sel[:, bead_cols]
             out = np.zeros_like(sel)
             if fill_map is not None and dens < 1.0:
-                out[:, bead_cols] = sub & (fill_map[:, bead_cols] > dither_ranks(len(bead_cols), max_spacing)[None, :])
-                return out
+                out[:, bead_cols] = sub
+                thr = np.zeros(sel.shape)
+                thr[:, bead_cols] = dither_ranks(len(bead_cols), max_spacing)[None, :]
+                return whole_runs(out, fill_map, thr) if lines == "whole" else out & (fill_map > thr)
             d = row_density(sub, dens, None if sweight is None else sweight[:, bead_cols], max_spacing, 1)
             pick = bead_cols[line_picks(sub.sum(0), d, max_spacing)]
             out[:, pick] = sel[:, pick]
@@ -475,7 +827,8 @@ def fine_layout(L: Layer, part: np.ndarray, solid: np.ndarray, walls: int, densi
         cls_map = np.where(orient, 90, 0) if orient.dtype == bool else orient
         anchor = (int(rows[0]), int(cols[0])) if rows.size else (0, 0)
         taken = np.zeros_like(part)
-        for cls in (0, 90, 45, 135):
+        more = sorted(set(np.unique(cls_map[inner]).tolist()) - {0, 45, 90, 135}) if inner.any() else []
+        for cls in [0, 90, 45, 135] + more:            # more: fit mode's other 11.25-degree bins
             area = cls_map == cls
             if not area.any():
                 continue
@@ -483,7 +836,7 @@ def fine_layout(L: Layer, part: np.ndarray, solid: np.ndarray, walls: int, densi
                 got = lines(solid_n & area, cls, 1.0) | lines(opt_n & area, cls, density_)
             else:
                 got = line_set(solid_n & area, cls, k, anchor, 1.0, max_spacing) | \
-                    line_set(opt_n & area, cls, k, anchor, density_, max_spacing, fill_map)
+                    line_set(opt_n & area, cls, k, anchor, density_, max_spacing, fill_map, lines)
             got &= ~taken
             taken |= got
             L.mask |= got
@@ -497,9 +850,13 @@ def fine_layout(L: Layer, part: np.ndarray, solid: np.ndarray, walls: int, densi
     L.req, L.lock = req, lock
     optfoot = box_sum(req, lo, hi) == 0                    # node footprint touches no required cell
     L.aux = {"region": region, "inner": inner, "optfoot": optfoot, "max_spacing": max_spacing,
-             "phase": (int(rows[0]) % k if rows.size else 0, int(cols[0]) % k if cols.size else 0)}
+             "phase": (int(rows[0]) % k if rows.size else 0, int(cols[0]) % k if cols.size else 0),
+             "fit": fit}
     L.invalidate()
     repair_fine(L)
+    ext = anchor_ends(L, free_ends(L))
+    if ext:
+        repair_fine(L, cells=ext)
     normalize_seams(L)
     L.invalidate()
     return L
@@ -600,6 +957,146 @@ def repair_fine(L: Layer, cells=None, reach: int | None = None) -> int:
                 break
     L.invalidate()
     return joins
+
+
+# ------------------------------------------------------------------ anchoring
+
+def _near_end(seq, at_head: bool, m: int) -> set:
+    """The m nodes of a stroke nearest its head (or tail): the end's own bead, which never
+    anchors it."""
+    return set(seq[:m]) if at_head else set(seq[-m:])
+
+
+def is_anchored(L: Layer, e: int, own: set) -> bool:
+    """True when another bead's centreline node (walls included) lies within one bead width
+    (kb cells, Chebyshev) of path end e: the footprints touch, so the bead can pass load
+    in-plane to the rest of the layer. `own`: the end's own nodes to ignore."""
+    k = max(L.kb, 1)
+    W = L.W
+    r, c = divmod(int(e), W)
+    r0, c0 = max(r - k, 0), max(c - k, 0)
+    rr, cc = np.nonzero(L.mask[r0:r + k + 1, c0:c + k + 1])
+    return any(x not in own for x in ((rr + r0) * W + cc + c0).tolist())
+
+
+def free_ends(L: Layer, pc=None) -> list[int]:
+    """Path ends (walls excluded) that no other bead touches: see is_anchored."""
+    pc = get_pieces(L) if pc is None else pc
+    lock = L.lock.reshape(-1) if L.lock is not None else None
+    m = 2 * max(L.kb, 1) + 1
+    out = []
+    for seq, loop in zip(pc.cells, pc.is_loop):
+        if loop or (lock is not None and lock[seq[0]]):
+            continue
+        for at_head in ((True, False) if len(seq) > 1 else (True,)):
+            e = seq[0] if at_head else seq[-1]
+            if not is_anchored(L, e, _near_end(seq, at_head, m)):
+                out.append(int(e))
+    return out
+
+
+def _end_run(L: Layer, e: int, m: int) -> tuple[list[int], bool] | None:
+    """The m nodes of e's stroke nearest e, starting at e, and whether e is the head; None
+    unless e ends an open path."""
+    at_head = L.prv[e] == -1
+    if not at_head and L.nxt[e] != -1:
+        return None
+    step = L.nxt if at_head else L.prv
+    run = [int(e)]
+    while len(run) < m and step[run[-1]] != -1:
+        run.append(int(step[run[-1]]))
+    return run, at_head
+
+
+def _anchor_path(N: Layer, e: int, steps: tuple, run: list, reach: int, m: int) -> list[int] | None:
+    """Nodes from e repeating `steps` through empty region nodes until another bead touches
+    the last one, or None (blocked, or nothing within reach)."""
+    W = N.W
+    region = N.aux["region"].reshape(-1) if N.aux is not None else N.part_mask.reshape(-1)
+    flat = N.flat_mask
+    path: list[int] = []
+    x = e
+    for i in range(reach):
+        y = x + steps[i % len(steps)]
+        if not (0 <= y < N.n) or not adjacent(x, y, W) or not region[y] or flat[y]:
+            return None
+        path.append(y)
+        x = y
+        if is_anchored(N, y, set(path[-m:]) | (set(run) if len(path) < m else set())):
+            return path
+    return None
+
+
+def anchor_end(N: Layer, e: int, reach: int = ANCHOR_REACH, turns: bool | None = None) -> list[int] | None:
+    """Extend path end e until another bead touches it, the shortest way of: along its line
+    (straight, or a 45-degree staircase: the last two steps repeat), or (`turns`, default
+    ANCHOR_TURNS; straight ends only) turning 90 degrees to the nearest bead beside it, a
+    T-joint that keeps the line's length. Returns the added nodes ([] if e is already
+    anchored), or None, with N unchanged, when nothing is in reach or every way is blocked
+    (the region's edge, another bead's node)."""
+    m = 2 * max(N.kb, 1) + 1
+    got = _end_run(N, e, m)
+    if got is None:
+        return None
+    run, at_head = got
+    if is_anchored(N, e, set(run)):
+        return []
+    if len(run) < 2:
+        return None
+    s1 = run[0] - run[1]
+    s0 = run[1] - run[2] if len(run) >= 3 else s1
+    ways = [(s0, s1)]
+    if (ANCHOR_TURNS if turns is None else turns) and s0 == s1:
+        side = N.W if abs(s1) == 1 else 1
+        ways += [(side,), (-side,)]
+    best = None
+    for st in ways:
+        path = _anchor_path(N, e, st, run, reach if best is None else len(best) - 1, m)
+        if path is not None and (best is None or len(path) < len(best)):
+            best = path
+    if best is None:
+        return None
+    path = best
+    prev = e
+    for y in path:
+        N.mask.reshape(-1)[y] = True
+        if at_head:
+            link(N, y, prev)
+        else:
+            link(N, prev, y)
+        prev = y
+    N.invalidate()
+    return path
+
+
+def anchor_ends(N: Layer, cells, reach: int = ANCHOR_REACH) -> list[int]:
+    """Anchor the free path ends among `cells` (walls excluded) that can be; returns the new
+    end nodes."""
+    lock = N.lock.reshape(-1) if N.lock is not None else None
+    out = []
+    for e in sorted(int(c) for c in cells):
+        if not N.flat_mask[e] or not is_end(N, e) or (lock is not None and lock[e]):
+            continue
+        try:
+            path = anchor_end(N, e, reach)
+        except FineEditError:
+            continue
+        if path:
+            out.append(path[-1])
+    return out
+
+
+def anchor(L: Layer, N: Layer, cell: int) -> dict:
+    """Edit: extend the free path end at `cell` until it touches a bead or a wall."""
+    if not is_end(L, cell) or (L.lock is not None and L.lock.reshape(-1)[cell]):
+        raise FineEditError("not a free path end")
+    path = anchor_end(N, cell)
+    if path is None:
+        raise FineEditError("nothing to anchor to within reach")
+    if not path:
+        raise FineEditError("end already anchored")
+    repair_fine(N, cells=[path[-1]])
+    return {"added": len(path)}
 
 
 # ------------------------------------------------------------------ sequence edits
@@ -760,10 +1257,35 @@ def _clear_nodes(N: Layer, gone: np.ndarray) -> set:
     return touched - set(np.flatnonzero(gone.reshape(-1)).tolist())
 
 
-def _relay(L: Layer, N: Layer, area: np.ndarray, angle: int, cell: int) -> None:
+PACK_SHARP = 3.0     # pack: the laid density follows worth ** PACK_SHARP (then clipped to 0..1)
+
+
+def packed_field(worth: np.ndarray, sel: np.ndarray, dens: float) -> np.ndarray:
+    """A density field over `sel` with mean `dens` that follows worth ** PACK_SHARP, each cell
+    clipped to [0, 1] (so the most valuable lines fill solid first); `dens` everywhere where
+    worth is flat or missing."""
+    out = np.where(sel, dens, 0.0)
+    if not sel.any() or dens <= 0.0 or dens >= 1.0:
+        return out
+    w = np.maximum(np.asarray(worth, float)[sel], 0.0) ** PACK_SHARP
+    if w.max() <= 0.0 or w.max() - w.min() <= 1e-12 * w.max():
+        return out
+    lo, hi = 0.0, dens / w.mean()
+    while np.minimum(hi * w, 1.0).mean() < dens and hi < 1e12:   # mean(min(s w, 1)) rises with s
+        hi *= 2.0
+    for _ in range(50):
+        mid = 0.5 * (lo + hi)
+        lo, hi = (mid, hi) if np.minimum(mid * w, 1.0).mean() < dens else (lo, mid)
+    out[sel] = np.minimum(hi * w, 1.0)
+    return out
+
+
+def _relay(L: Layer, N: Layer, area: np.ndarray, angle: int, cell: int, worth: np.ndarray | None = None) -> None:
     """Re-lay the free beads over `area` (node positions) k cells apart, through `cell`'s row
     (angle 0) or column (90): every line over required cells, and over optional cells the
-    share of lines that keeps the area's current infill share."""
+    share of lines that keeps the area's current infill share. With `worth` (pack), the
+    optional lines are laid from packed_field instead of evenly: the same share, packed onto
+    the lines where worth is highest (each run of a line laid whole, shell.dither_ranks)."""
     from rltp.cover.shell import line_picks
     H, W, k = L.H, L.W, L.kb
     lock = L.lock if L.lock is not None else np.zeros_like(area)
@@ -771,7 +1293,21 @@ def _relay(L: Layer, N: Layer, area: np.ndarray, angle: int, cell: int) -> None:
     dens = float((L.material & opt_cells).sum()) / max(int(opt_cells.sum()), 1)
     touched = _clear_nodes(N, area & N.mask & ~lock)
     r, c = divmod(cell, W)
-    if angle in (45, 135):                 # diagonal lines through the cell, keeping the share
+    if worth is not None:
+        cand = area & N.aux["inner"] & ~N.mask
+        spacing = int(N.aux.get("max_spacing", 1 << 30))
+        opt = cand & ~L.req
+        new = line_set(cand & L.req, angle, k, (r, c), 1.0, spacing) | \
+            line_set(opt, angle, k, (r, c), dens, spacing, fill_map=packed_field(worth, opt, dens), lines="whole")
+        if not new.any():
+            raise FineEditError("nothing to lay")
+        N.mask |= new
+        N.invalidate()
+        link_lines(N, new, angle)
+        ends = set(np.flatnonzero(new.reshape(-1) & _ends(N)).tolist()) | {x for x in touched if N.flat_mask[x]}
+        _join_and_anchor(L, N, ends, touched)
+        return
+    if angle not in (0, 90):               # diagonal lines through the cell, keeping the share
         cand = area & N.aux["inner"] & ~N.mask
         spacing = int(N.aux.get("max_spacing", 1 << 30))
         new = line_set(cand & L.req, angle, k, (r, c), 1.0, spacing) | \
@@ -780,10 +1316,9 @@ def _relay(L: Layer, N: Layer, area: np.ndarray, angle: int, cell: int) -> None:
             raise FineEditError("nothing to lay")
         N.mask |= new
         N.invalidate()
-        diag_links(N, new, angle)
+        link_lines(N, new, angle)
         ends = set(np.flatnonzero(new.reshape(-1) & _ends(N)).tolist()) | {x for x in touched if N.flat_mask[x]}
-        repair_fine(N, cells=ends)
-        fix_seams_local(N, ends | touched, prefer=sorted(L.seam))
+        _join_and_anchor(L, N, ends, touched)
         return
     rr, cc = np.mgrid[0:H, 0:W]
     phase = (rr % k == r % k) if angle == 0 else (cc % k == c % k)
@@ -810,8 +1345,17 @@ def _relay(L: Layer, N: Layer, area: np.ndarray, angle: int, cell: int) -> None:
     N.invalidate()
     zigzag_links(N, new, angle)
     ends = set(np.flatnonzero(new.reshape(-1) & _ends(N)).tolist()) | {x for x in touched if N.flat_mask[x]}
+    _join_and_anchor(L, N, ends, touched)
+
+
+def _join_and_anchor(L: Layer, N: Layer, ends: set, touched: set) -> None:
+    """After laying beads: join the new and cut ends to nearby ends, anchor the rest that can
+    be (anchor_ends), and fix the seams of the loops touched."""
     repair_fine(N, cells=ends)
-    fix_seams_local(N, ends | touched, prefer=sorted(L.seam))
+    ext = anchor_ends(N, ends)
+    if ext:
+        repair_fine(N, cells=ext)
+    fix_seams_local(N, ends | touched | set(ext), prefer=sorted(L.seam))
 
 
 def refill(L: Layer, N: Layer, cell: int, angle: int, size: int = WINDOW) -> dict:
@@ -821,6 +1365,21 @@ def refill(L: Layer, N: Layer, cell: int, angle: int, size: int = WINDOW) -> dic
     win = np.zeros((H, W), bool)
     win[r0:r1, c0:c1] = True
     _relay(L, N, win, angle, cell)
+    return {"window": [r0, c0, r1, c1]}
+
+
+def pack(L: Layer, N: Layer, cell: int, angle: int, size: int = 32) -> dict:
+    """Re-lay a size x size window like refill, keeping its infill share, with its lines packed
+    where one more unit of infill is worth most: L.ctx["worth"], per cell (set by the annealing
+    loop from rltp.search.guide.WorthMap)."""
+    worth = L.ctx.get("worth") if L.ctx is not None else None
+    if worth is None:
+        raise FineEditError("no worth map")
+    H, W = L.H, L.W
+    r0, r1, c0, c1 = _window(cell, H, W, size)
+    win = np.zeros((H, W), bool)
+    win[r0:r1, c0:c1] = True
+    _relay(L, N, win, angle, cell, worth=worth)
     return {"window": [r0, c0, r1, c1]}
 
 
@@ -856,6 +1415,109 @@ def flip_region(L: Layer, N: Layer, cell: int, turn: int = 90) -> dict:
     to = int((cls[r, c] + turn) % 180)
     _relay(L, N, area, to, cell)
     return {"cells": int(area.sum()), "to": to}
+
+
+def bin_deg(b: int):
+    """Degrees of an 11.25-degree bin: an int for the four classes (the 0/45/90/135 code
+    paths), a float otherwise."""
+    d = (int(b) % LINE_BINS) * BIN_DEG
+    return int(d) if d in (0, 45, 90, 135) else d
+
+
+def bead_bins(L: Layer) -> np.ndarray:
+    """Per cell (H x W): the 11.25-degree bin (0..15) most of its covering nodes' path
+    directions fall in (rltp.cover.paths.node_angles), -1 where empty (cached)."""
+    out = L._cache.get("bead_bins")
+    if out is not None:
+        return out
+    from rltp.cover.paths import node_angles
+    H, W, k = L.H, L.W, L.kb
+    a = node_angles(L)
+    ok = ~np.isnan(a)
+    b = np.full(L.n, -1, np.int64)
+    b[ok] = np.round(np.degrees(a[ok]) / BIN_DEG).astype(np.int64) % LINE_BINS
+    cnt = np.stack([cover_sum((b == j).reshape(H, W), k) for j in range(LINE_BINS)])
+    out = np.where((cnt.sum(0) > 0) & (density(L) >= 0.5), np.argmax(cnt, 0), -1)
+    L._cache["bead_bins"] = out
+    return out
+
+
+def turn16(L: Layer, N: Layer, cell: int, step: int) -> dict:
+    """Fit mode: turn the connected area around `cell` (walls excluded, within ALIGN_WINDOW)
+    whose beads run in the cell's 11.25-degree bin by `step` bins, keeping its infill share."""
+    if not fit_mode(L):
+        raise FineEditError("11.25-degree lines need fit mode")
+    H, W, k = L.H, L.W, L.kb
+    b = bead_bins(L)
+    r, c = divmod(cell, W)
+    lock = L.lock if L.lock is not None else np.zeros_like(L.mask)
+    walls = cover_sum(lock, k) > 0
+    if walls[r, c] or b[r, c] < 0:
+        raise FineEditError("no bead here")
+    r0, r1, c0, c1 = _window(cell, H, W, ALIGN_WINDOW)
+    same = np.zeros((H, W), bool)
+    same[r0:r1, c0:c1] = b[r0:r1, c0:c1] == b[r, c]
+    lab, _ = ndimage.label(same & ~walls)
+    area = lab == lab[r, c]
+    to = bin_deg(b[r, c] + step)
+    _relay(L, N, area, to, cell)
+    return {"cells": int(area.sum()), "to": to}
+
+
+LAY_SIZES = {"lay16": 16, "lay32": 32, "lay64": 64}
+
+
+def lay(L: Layer, N: Layer, cell: int, size: int) -> dict:
+    """Fit mode: re-lay a size x size window, keeping its infill share, at the 11.25-degree
+    bin the direction guide picks for a window of that size there: L.ctx["lay"][size] (H x W,
+    0..15, -1 for none; rltp.search.guide.DirectionMap)."""
+    maps = L.ctx.get("lay") if L.ctx is not None else None
+    if not fit_mode(L) or maps is None or size not in maps:
+        raise FineEditError("no direction map")
+    H, W = L.H, L.W
+    r, c = divmod(cell, W)
+    d = int(maps[size][r, c])
+    if d < 0:
+        raise FineEditError("no best direction here")
+    r0, r1, c0, c1 = _window(cell, H, W, size)
+    win = np.zeros((H, W), bool)
+    win[r0:r1, c0:c1] = True
+    _relay(L, N, win, bin_deg(d), cell)
+    return {"window": [r0, c0, r1, c1], "to": bin_deg(d)}
+
+
+ALIGN_WINDOW = 64      # align_region: the area stays within this window around the cell
+
+
+def align_region(L: Layer, N: Layer, cell: int) -> dict:
+    """Re-lay the connected area around `cell` (walls excluded, within ALIGN_WINDOW) whose
+    best bead direction is the cell's, in that direction, keeping its infill share. The map
+    is L.ctx["best"] (H x W: 0..3 for 0/45/90/135 degrees, -1 for none), set by the
+    direction guide (rltp.search.guide) from the current strains."""
+    best = L.ctx.get("best") if L.ctx is not None else None
+    if best is None:
+        raise FineEditError("no direction map")
+    H, W, k = L.H, L.W, L.kb
+    r, c = divmod(cell, W)
+    d = int(best[r, c])
+    if d < 0:
+        raise FineEditError("no best direction here")
+    lock = L.lock if L.lock is not None else np.zeros_like(L.mask)
+    r0, r1, c0, c1 = _window(cell, H, W, ALIGN_WINDOW)
+    same = np.zeros((H, W), bool)
+    same[r0:r1, c0:c1] = (best[r0:r1, c0:c1] == d)
+    same &= ~(cover_sum(lock, k) > 0)
+    lab, _ = ndimage.label(same)
+    if lab[r, c] == 0:
+        raise FineEditError("cell under a wall")
+    area = lab == lab[r, c]
+    angle = (0, 45, 90, 135)[d]
+    cls = bead_class(L)
+    beads = area & (cls >= 0)
+    if beads.any() and (cls[beads] == angle).mean() > 0.9:
+        raise FineEditError("already aligned")
+    _relay(L, N, area, angle, cell)
+    return {"cells": int(area.sum()), "to": angle}
 
 
 def clear(L: Layer, N: Layer, cell: int) -> dict:
@@ -900,8 +1562,7 @@ def stack(L: Layer, N: Layer, cell: int) -> dict:
             link(N, x, y)
     N.invalidate()
     ends = set(np.flatnonzero(wf & _ends(N)).tolist()) | {x for x in touched if N.flat_mask[x]}
-    repair_fine(N, cells=ends)
-    fix_seams_local(N, ends | touched, prefer=sorted(L.seam))
+    _join_and_anchor(L, N, ends, touched)
     return {"window": [r0, c0, r1, c1]}
 
 
@@ -931,6 +1592,24 @@ def fine_masks(L: Layer) -> dict:
     out["flip_region"] = out["turn_region"] = free
     out["refill_45"] = out["refill_135"] = out["refill_0"]
     out["refill32_45"] = out["refill32_135"] = out["refill32_0"]
+    best = L.ctx.get("best") if L.ctx is not None else None
+    out["align_region"] = free & (best >= 0) if best is not None else np.zeros_like(m)
+    fe = np.zeros(L.n, bool)
+    fe[free_ends(L)] = True
+    out["anchor"] = fe.reshape(H, W)
+    worth = L.ctx.get("worth") if L.ctx is not None else None
+    none = np.zeros_like(m)
+    for head, size in (("pack32", 32), ("pack64", 64)):
+        valid = out[f"refill{size}_0"] & (L.part is not None) if worth is not None else none
+        for ang in PACK_ANGLES[head]:
+            out[f"{head}_{ang}"] = valid
+    # 16 line bins: on in fit mode once the direction guide has put its lay maps in the
+    # layer's context (the annealing loop with line_bins = 16)
+    maps = L.ctx.get("lay") if (fit_mode(L) and L.ctx is not None) else None
+    out["turn16_pos"] = out["turn16_neg"] = free if maps is not None else none
+    for name, size in LAY_SIZES.items():
+        win = out["refill_0"] if size == 16 else out[f"refill{size}_0"]
+        out[name] = win & (maps[size] >= 0) if maps is not None and size in maps else none
     below = L.ctx.get("below_layer") if L.ctx is not None else None
     if below is not None:
         diff = (below.mask ^ m) & inner
@@ -940,9 +1619,12 @@ def fine_masks(L: Layer) -> dict:
     return out
 
 
+PACK_ANGLES = {"pack32": (0, 45, 90, 135), "pack64": (0, 90)}
 FINE_OPS = ("join", "shift_pos", "shift_neg", "extend", "retract", "refill_0", "refill_90", "clear_w", "stack_w",
             "refill32_0", "refill32_90", "refill64_0", "refill64_90", "flip_region",
-            "refill_45", "refill_135", "refill32_45", "refill32_135", "turn_region")
+            "refill_45", "refill_135", "refill32_45", "refill32_135", "turn_region", "align_region", "anchor",
+            "pack32_0", "pack32_45", "pack32_90", "pack32_135", "pack64_0", "pack64_90",
+            "turn16_pos", "turn16_neg", "lay16", "lay32", "lay64")
 
 
 def apply_fine(L: Layer, N: Layer, name: str, cell: int) -> dict:
@@ -962,10 +1644,21 @@ def apply_fine(L: Layer, N: Layer, name: str, cell: int) -> dict:
         head, ang = name.split("_")
         size = {"refill": WINDOW, "refill32": 32, "refill64": 64}[head]
         return refill(L, N, cell, int(ang), size)
+    if name.startswith("pack"):
+        head, ang = name.split("_")
+        return pack(L, N, cell, int(ang), {"pack32": 32, "pack64": 64}[head])
+    if name in ("turn16_pos", "turn16_neg"):
+        return turn16(L, N, cell, 1 if name == "turn16_pos" else -1)
+    if name in LAY_SIZES:
+        return lay(L, N, cell, LAY_SIZES[name])
     if name == "flip_region":
         return flip_region(L, N, cell, 90)
     if name == "turn_region":
         return flip_region(L, N, cell, 45)
+    if name == "align_region":
+        return align_region(L, N, cell)
+    if name == "anchor":
+        return anchor(L, N, cell)
     if name == "clear_w":
         return clear(L, N, cell)
     if name == "stack_w":

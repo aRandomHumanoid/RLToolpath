@@ -105,13 +105,19 @@ class FieldEval:
     g_theta: np.ndarray | None = None   # dJ / d theta per union cell
     g_rho: np.ndarray | None = None     # dJ / d rho per union cell
     seconds: float = 0.0
+    stiff: float = 1.0                  # mean over cases of compliance / the part's reference (comp0)
+    J2: float = 0.0                     # bulk: sum of FI^2 (cases scaled by case_scale2), when asked for
+    g_theta_b: np.ndarray | None = None  # d J2 / d theta per union cell
+    g_rho_b: np.ndarray | None = None
+    g_theta_s: np.ndarray | None = None  # d stiff / d theta per union cell
+    g_rho_s: np.ndarray | None = None
 
 
 class FieldModel:
     """The laminate strength term as a function of per-cell theta and rho (over the
     laminate problem's cells, `lam.cells`)."""
 
-    def __init__(self, part):
+    def __init__(self, part, bulk: bool = False):
         if not part.laminate:
             raise ValueError("the gradient layout step needs the laminate stack model")
         lam = part._lam_problem()
@@ -125,11 +131,24 @@ class FieldModel:
         self.cells = lam.cells
         self.ec = lam.elem_cell
         nc = self.cells.size
+        # coarsened mesh (several cells per element): cells -> elements, summing
+        self.cf = getattr(lam, "cf", 1)
+        self.ce = getattr(lam, "cell_elem", None)
+        self.agg = None
+        kp = getattr(lam, "keep", None)
+        self.keep = None if kp is None else (kp[self.ec] if self.r > 1 else kp).astype(float)
+        if self.cf > 1:
+            import scipy.sparse as sp
+            ne = lam.edof.shape[0]
+            self.agg = sp.csr_matrix((np.ones(nc), (self.ce, np.arange(nc))), shape=(ne, nc))
         self.N = int(sum(L.part_mask.sum() for L in part.layers))
         C = lam.n_cases
         self.C = C
         self.cs = (np.ones(C) if lam.case_scale is None or C == 1
                    else np.asarray(lam.case_scale, float))
+        cs2 = getattr(lam, "case_scale2", None)
+        self.cs2 = np.ones(C) if cs2 is None or C == 1 else np.asarray(cs2, float)
+        self.bulk = bulk                          # also the bulk term (p = 2) and its gradient
         G = np.zeros((3, 3, 8, 8))
         for xi in (-_G, _G):
             for eta in (-_G, _G):
@@ -137,6 +156,9 @@ class FieldModel:
                 G += np.einsum("ia,jb->ijab", B, B)
         self.Gb = G
         self.B0 = lam.B0
+        # stiffness: each case's compliance relative to the part's reference (the slicer start)
+        c0 = getattr(part, "comp0", None)
+        self.ca = None if c0 is None else np.where(np.asarray(c0) > 0, 1.0 / np.where(np.asarray(c0) > 0, c0, 1.0), 0.0)
         # per cell: layers holding field beads (solid, or sparse optional) and their thickness
         ns, npn, hs, hp = (np.zeros(nc) for _ in range(4))
         aw = np.zeros((nc, 4))                    # walls' stiffness multipliers (0, 45, 90, 135)
@@ -203,27 +225,39 @@ class FieldModel:
         QT = self.Q @ T                                          # (ne, 3, 3) = M
         Qb = np.swapaxes(T, -1, -2) @ QT
         D = self.Dw + S_e[:, None, None] * Qb
+        if self.cf > 1:                                          # element D: mean of its cells'
+            D = (self.agg @ D.reshape(-1, 9)).reshape(-1, 3, 3) / (self.cf * self.cf)
         Ke = np.einsum("eij,ijab->eab", D, self.Gb)
-        K = lam._to_csc(Ke)
-        lu = lam._factor(K)
-        ff = lam.ff.reshape(lam.ff.shape[0], -1)                 # (nf, C)
-        uf = lu.solve(ff)
-        u = np.zeros((lam.ndof, C))
-        u[lam.free] = uf
+        lus = lam.factor(Ke)                                     # one per set of supports
+        u = lam.solve_rhs(lus, lam.f.reshape(lam.ndof, -1))      # (ndof, C)
         ue = u[lam.edof]                                         # (ne, 8, C)
+        comp = (lam.f.reshape(lam.ndof, -1) * u).sum(0)          # (C,) compliance per case
+        stiff = float(np.mean(comp * self.ca)) if self.ca is not None else 1.0
         eps = np.einsum("ja,eac->ecj", self.B0, ue)             # (ne, C, 3)
+        if self.cf > 1:
+            eps = eps[self.ce]                                   # each cell takes its element's strain
         cs = self.cs
         # field beads
         sm = np.einsum("eij,ecj->eci", QT, eps)
         fi, gs = tsai_wu_grad(sm, self.mat)                     # (ne, C), (ne, C, 3)
+        if self.keep is not None:                                # clamp band: those cells don't count
+            fi, gs = fi * self.keep, gs * self.keep[..., None]
         fis = fi * cs[None, :]
         Jf_e = w_e * np.mean(fis ** p, 1)
         # walls: the worst of the directions each holds
         ew = self.w_elem
         epw = eps[ew]                                            # (nw, C, 3)
-        smd = np.einsum("dij,wcj->wdci", self.Md, epw)          # (nw, 4, C, 3)
-        fid, gsd = tsai_wu_grad(smd, self.mat)                  # (nw, 4, C), (nw, 4, C, 3)
-        fid = np.where(self.w_pres[:, :, None], fid, -1.0)
+        # only the directions each wall group holds (most hold one or two of the four)
+        pw, pd = np.nonzero(self.w_pres)
+        smp = np.einsum("pij,pcj->pci", self.Md[pd], epw[pw])   # (pairs, C, 3)
+        fip, gsp = tsai_wu_grad(smp, self.mat)
+        if self.keep is not None:
+            kw = self.keep[ew][pw]
+            fip, gsp = fip * kw, gsp * kw[..., None]
+        fid = np.full((len(ew), 4, C), -1.0)
+        fid[pw, pd] = fip
+        gsd = np.zeros((len(ew), 4, C, 3))
+        gsd[pw, pd] = gsp
         arg = np.argmax(fid, 1)                                 # (nw, C)
         fiw = np.take_along_axis(fid, arg[:, None, :], 1)[:, 0, :]
         fiw = np.maximum(fiw, 0.0)
@@ -235,44 +269,98 @@ class FieldModel:
             Js = float(np.sum(w_e * np.mean(fis ** self.p, 1))
                        + np.sum(self.w_cnt[:, None] * (fiw * cs) ** self.p) / C)
         fa = (Js / self.N) ** (1 / self.p) if self.N else 0.0
+        J2 = 0.0
+        if self.bulk:
+            fis2 = fi * self.cs2[None, :]
+            J2 = float(np.sum(w_e * np.mean(fis2 ** 2, 1)) + np.sum(self.w_cnt[:, None] * (fiw * self.cs2) ** 2) / C)
         if not grad:
-            return FieldEval(J, fa, seconds=time.time() - t0)
-        # dJ/d eps
-        cf = (w_e[:, None] * p * cs[None, :] ** p * np.maximum(fi, 0.0) ** (p - 1) / C)   # (ne, C)
-        dsig = cf[..., None] * gs                                                          # (ne, C, 3)
-        deps = np.einsum("eij,eci->ecj", QT, dsig)                                         # M' dsig
+            return FieldEval(J, fa, seconds=time.time() - t0, stiff=stiff, J2=J2)
         gsel = np.take_along_axis(gsd, arg[:, None, :, None], 1)[:, 0]                     # (nw, C, 3)
         Msel = self.Md[arg]                                                                # (nw, C, 3, 3)
-        cw = self.w_cnt[:, None] * p * cs[None, :] ** p * fiw ** (p - 1) / C
-        depw = np.einsum("wcij,wci->wcj", Msel, cw[..., None] * gsel)
-        np.add.at(deps, ew, depw)
-        due = np.einsum("ja,ecj->eac", self.B0, deps)                                       # (ne, 8, C)
-        rhs = np.zeros((lam.ndof, C))
-        for c in range(C):
-            rhs[:, c] = np.bincount(lam.edof.reshape(-1), weights=due[:, :, c].reshape(-1),
-                                    minlength=lam.ndof)
-        lf = lu.solve(rhs[lam.free])
-        lm = np.zeros((lam.ndof, C))
-        lm[lam.free] = lf
-        le = lm[lam.edof]
-        # E_ij = lambda_e' G_ij u_e, summed over cases
         Gu = np.einsum("ijab,ebc->eijac", self.Gb, ue)
-        E = np.einsum("eac,eijac->eij", le, Gu)
         dQb = np.swapaxes(strain_rot_d(th_e), -1, -2) @ QT
         dQb = dQb + np.swapaxes(dQb, -1, -2)
-        gS_e = -np.einsum("eij,eij->e", Qb, E)                  # implicit, per unit S
-        gth_e = -S_e * np.einsum("eij,eij->e", dQb, E)
         dM = self.Q @ strain_rot_d(th_e)
-        gth_e += np.einsum("eci,eij,ecj->e", dsig, dM, eps)      # explicit: the bead frame turns
-        grho_e = self.hp[ec] * gS_e if self.r > 1 else self.hp * gS_e
-        grho_e = grho_e + (self.npn[ec] if self.r > 1 else self.npn) / r2 * np.mean(fis ** p, 1)
-        if self.r > 1:
-            nc = self.cells.size
-            g_th = np.bincount(ec, gth_e, minlength=nc)
-            g_rho = np.bincount(ec, grho_e, minlength=nc)
-        else:
-            g_th, g_rho = gth_e, grho_e
-        return FieldEval(J, fa, g_th * self.theta_cells, g_rho * self.rho_cells, time.time() - t0)
+        hp_e = self.hp[ec] if self.r > 1 else self.hp
+        npn_e = self.npn[ec] if self.r > 1 else self.npn
+
+        def to_cells(g):
+            return np.bincount(ec, g, minlength=self.cells.size) if self.r > 1 else g
+
+        def adjoint(cf, cw, rho_explicit):
+            """Gradient (theta, rho per union cell) of a sum of FI^k whose d/dFI is cf (field
+            beads, (ne, C)) and cw (walls, (nw, C)); rho_explicit: d/d(weight) per element."""
+            dsig = cf[..., None] * gs                                                      # (ne, C, 3)
+            deps = np.einsum("eij,eci->ecj", QT, dsig)                                     # M' dsig
+            depw = np.einsum("wcij,wci->wcj", Msel, cw[..., None] * gsel)
+            np.add.at(deps, ew, depw)
+            due = np.einsum("ja,ecj->eac", self.B0, deps)                                   # (ne, 8, C)
+            if self.cf > 1:                                                                # cells -> elements
+                due = (self.agg @ due.reshape(due.shape[0], -1)).reshape(-1, 8, C)
+            rhs = np.zeros((lam.ndof, C))
+            for c in range(C):
+                rhs[:, c] = np.bincount(lam.edof.reshape(-1), weights=due[:, :, c].reshape(-1),
+                                        minlength=lam.ndof)
+            lm = lam.solve_rhs(lus, rhs)                         # adjoint: K is symmetric
+            # E_ij = lambda_e' G_ij u_e, summed over cases
+            E = np.einsum("eac,eijac->eij", lm[lam.edof], Gu)
+            if self.cf > 1:                                      # dJ/dD of a cell: 1/c^2 of its element's
+                E = E[self.ce] / (self.cf * self.cf)
+            gS_e = -np.einsum("eij,eij->e", Qb, E)              # implicit, per unit S
+            gth_e = -S_e * np.einsum("eij,eij->e", dQb, E)
+            gth_e += np.einsum("eci,eij,ecj->e", dsig, dM, eps)  # explicit: the bead frame turns
+            grho_e = hp_e * gS_e + npn_e / r2 * rho_explicit
+            return to_cells(gth_e) * self.theta_cells, to_cells(grho_e) * self.rho_cells
+
+        # strength: dJ/dFI = p cs^p FI^(p-1) / C, weighted
+        cf = w_e[:, None] * p * cs[None, :] ** p * np.maximum(fi, 0.0) ** (p - 1) / C
+        cw = self.w_cnt[:, None] * p * cs[None, :] ** p * fiw ** (p - 1) / C
+        g_th, g_rho = adjoint(cf, cw, np.mean(fis ** p, 1))
+        out = FieldEval(J, fa, g_th, g_rho, time.time() - t0, stiff=stiff, J2=J2)
+        if self.bulk:
+            c2 = self.cs2 * self.cs2
+            cf2 = w_e[:, None] * 2.0 * c2[None, :] * np.maximum(fi, 0.0) / C
+            cw2 = self.w_cnt[:, None] * 2.0 * c2[None, :] * fiw / C
+            out.g_theta_b, out.g_rho_b = adjoint(cf2, cw2, np.mean(fis2 ** 2, 1))
+        # stiffness: d stiff / dD_e = -sum_c ca_c / C u_e' G u_e (compliance is self-adjoint)
+        if self.ca is not None:
+            Es = np.einsum("eac,eijac->eij", ue * (self.ca / C)[None, None, :], Gu)
+            if self.cf > 1:
+                Es = Es[self.ce] / (self.cf * self.cf)
+            gSs_e = -np.einsum("eij,eij->e", Qb, Es)
+            gths_e = -S_e * np.einsum("eij,eij->e", dQb, Es)
+            out.g_theta_s = to_cells(gths_e) * self.theta_cells
+            out.g_rho_s = to_cells(hp_e * gSs_e) * self.rho_cells
+        out.seconds = time.time() - t0
+        return out
+
+
+def layout_fields(part, model: FieldModel) -> tuple[np.ndarray, np.ndarray]:
+    """The fields a laid-out part holds (fine bead grids), per union cell (model.cells order):
+    theta, the doubled-angle mean of its bead directions over the layers holding field beads
+    (weighted by material), and rho, the sparse layers' mean fill of its optional cells. The
+    field model on these tracks the evaluator closely (FI_agg within a few % on the suite
+    parts), so its gradient says where the layout would gain from material (guide.WorthMap)."""
+    from rltp.cover.beads import cell_shares, cell_wh, density
+    cells = model.cells
+    nc = cells.size
+    rn, vx, vy = np.zeros(nc), np.zeros(nc), np.zeros(nc)
+    for L in part.layers:
+        inpart = L.part_mask.reshape(-1)[cells]
+        wall = wall_cells(L).reshape(-1)[cells]
+        req = L.req.reshape(-1)[cells] if L.req is not None else inpart
+        fld = inpart & ~wall
+        D = np.minimum(density(L), 1.0).reshape(-1)[cells]
+        sh = cell_shares(L)
+        if sh is None:
+            wh = cell_wh(L)
+            sh = np.stack([wh, 0 * wh, 1 - wh, 0 * wh], -1)
+        sh = sh[cells]
+        rn += D * (fld & ~req)
+        w = D * fld
+        vx += w * (sh[:, 0] - sh[:, 2])
+        vy += w * (sh[:, 1] - sh[:, 3])
+    return 0.5 * np.arctan2(vy, vx), np.clip(rn / np.maximum(model.npn, 1), 0.0, 1.0)
 
 
 # ---------------------------------------------------------------------- filters
@@ -392,7 +480,8 @@ def stages_for(sigma_mm: float, p: float, iters: int, continuation: bool = True)
 def optimize_fields(part, theta0: np.ndarray, target: float, rho_min: float, sigma_mm: float = 0.75,
                     iters: int = 60, move: float = 0.05, turn: float = np.radians(6.0),
                     tol: float = 1e-4, continuation: bool = False, model=None, name: str = "",
-                    end_cost: float = 0.0, w_strength: float = 1.0, progress=None) -> FieldResult:
+                    end_cost: float = 0.0, w_strength: float = 1.0, progress=None,
+                    w_stiff: float = 0.0, w_bulk: float = 0.0) -> FieldResult:
     """theta0 (H x W, rad): starting directions (e.g. the stress map's). target: the sparse
     layers' mean infill density; rho_min: sparsest allowed lines. Each iteration takes one
     gradient step on both fields (optimality criteria for rho, a scaled step for theta),
@@ -400,9 +489,11 @@ def optimize_fields(part, theta0: np.ndarray, target: float, rho_min: float, sig
     stages of stages_for.
 
     Objective, in the score's units: w_strength x ln FI_agg (at the stage's exponent) plus
-    end_cost x the predicted infill line ends (line_ends); end_cost 0 leaves strength alone."""
+    end_cost x the predicted infill line ends (line_ends); end_cost 0 leaves strength alone;
+    plus w_stiff x ln(mean compliance relative to the start) when the score has a stiffness
+    term, and w_bulk x ln of the p = 2 aggregate when it has a bulk term."""
     t0 = time.time()
-    model = model or FieldModel(part)
+    model = model or FieldModel(part, bulk=w_bulk > 0)
     L0 = part.layers[0]
     H, W = L0.H, L0.W
     pc = L0.material_frame.p
@@ -437,6 +528,10 @@ def optimize_fields(part, theta0: np.ndarray, target: float, rho_min: float, sig
             ev = model.evaluate(th.reshape(-1)[cells], rt.reshape(-1)[cells], grad=grad, q=q)
             ends = line_ends(th, rt, tmask, sol_w, vol_w, kb) if end_cost > 0 else (0.0, 0.0, 0.0)
             ev.F = ws * np.log(max(ev.J, 1e-300)) + end_cost * ends[0]
+            if w_stiff > 0:
+                ev.F += w_stiff * np.log(max(ev.stiff, 1e-300))
+            if w_bulk > 0:
+                ev.F += 0.5 * w_bulk * np.log(max(ev.J2, 1e-300))
             ev.ends = ends
             return ev, th, vx, vy, rt
 
@@ -445,6 +540,12 @@ def optimize_fields(part, theta0: np.ndarray, target: float, rho_min: float, sig
             gth[cells] = ws * ev.g_theta / ev.J
             grh = np.zeros(H * W)
             grh[cells] = ws * ev.g_rho / ev.J
+            if w_stiff > 0 and ev.g_theta_s is not None:
+                gth[cells] += w_stiff * ev.g_theta_s / ev.stiff
+                grh[cells] += w_stiff * ev.g_rho_s / ev.stiff
+            if w_bulk > 0 and ev.g_theta_b is not None:
+                gth[cells] += 0.5 * w_bulk * ev.g_theta_b / ev.J2
+                grh[cells] += 0.5 * w_bulk * ev.g_rho_b / ev.J2
             gth, grh = gth.reshape(H, W), grh.reshape(H, W)
             if end_cost > 0:
                 gth = gth + end_cost * ev.ends[1] * tmask
@@ -553,12 +654,13 @@ def _start_job(name):
     from rltp.search.parallel import SHARED
     J = SHARED
     part, opts = J["part"], J["opts"]
-    model = FieldModel(part)
+    model = FieldModel(part, bulk=J.get("w_bulk", 0.0) > 0)
     res = optimize_fields(part, start_field(name, J["theta_stress"], part.layers[0].material_frame.p),
                           J["target"], J["rho_min"], sigma_mm=opts.sigma_mm, iters=opts.iters,
                           continuation=opts.continuation, model=model, name=name, end_cost=J["end_cost"],
-                          w_strength=J["w_strength"], progress=J["progress"])
-    cls = classes(res.theta, res.theta_cells, J["diagonals"], J["min_axis"], J["min_diag"])
+                          w_strength=J["w_strength"], progress=J["progress"], w_stiff=J.get("w_stiff", 0.0),
+                          w_bulk=J.get("w_bulk", 0.0))
+    cls = classes(res.theta, res.theta_cells, J["diagonals"], J["min_axis"], J["min_diag"], J.get("bins", 4))
     cells = model.cells
     thr = np.radians(cls.astype(float))
     res.fi_rounded = model.evaluate(thr.reshape(-1)[cells], res.rho.reshape(-1)[cells], grad=False).fi_agg
@@ -573,9 +675,11 @@ def _start_job(name):
 
 def multi_start(part, theta_stress: np.ndarray, target: float, rho_min: float, opts: FieldOptions,
                 diagonals: bool = False, min_axis: int = 0, min_diag: int = 0, progress=None,
-                end_cost: float = 0.0, w_strength: float = 1.0) -> list:
+                end_cost: float = 0.0, w_strength: float = 1.0, w_stiff: float = 0.0,
+                w_bulk: float = 0.0, bins: int = 4) -> list:
     """optimize_fields from opts.starts starting direction fields (in parallel processes
-    where the platform can fork), best first by FI_agg after rounding to the layout's classes.
+    where the platform can fork), best first by FI_agg after rounding to the layout's classes
+    (bins = 16: multiples of 11.25 degrees, classes()).
     end_cost, w_strength: the line-end cost and strength weight (optimize_fields)."""
     import os
     from rltp.search.parallel import fork_map
@@ -583,7 +687,8 @@ def multi_start(part, theta_stress: np.ndarray, target: float, rho_min: float, o
     workers = opts.workers or min(len(names), os.cpu_count() or 1)
     shared = {"part": part, "opts": opts, "theta_stress": theta_stress, "target": target, "rho_min": rho_min,
               "diagonals": diagonals, "min_axis": min_axis, "min_diag": min_diag, "progress": progress,
-              "end_cost": end_cost, "w_strength": w_strength}
+              "end_cost": end_cost, "w_strength": w_strength, "w_stiff": w_stiff, "w_bulk": w_bulk,
+              "bins": bins}
     res = fork_map(_start_job, names, workers, shared)
     return sorted(res, key=lambda r: r.fi_rounded)
 
@@ -591,13 +696,33 @@ def multi_start(part, theta_stress: np.ndarray, target: float, rho_min: float, o
 # ---------------------------------------------------------------------- fields to a layout
 
 def classes(theta: np.ndarray, mask: np.ndarray, diagonals: bool, min_axis: int = 0,
-            min_diag: int = 0) -> np.ndarray:
+            min_diag: int = 0, bins: int = 4) -> np.ndarray:
     """Bead class per cell (0, 45, 90, 135 degrees) nearest to theta; 0/90 only unless
     `diagonals`. Diagonal patches under `min_diag` cells fall back to the nearer axis, and
-    axis patches under `min_axis` cells take the other axis (fewer short strokes)."""
+    axis patches under `min_axis` cells take the other axis (fewer short strokes). With
+    bins = 16 (fit mode, rltp.cover.beads.LINE_BINS): the nearest multiple of 11.25 degrees
+    (float), patches of the in-between angles under `min_diag` cells first falling back to
+    the nearest of the four classes."""
     deg = np.mod(np.degrees(theta), 180.0)
     axis = np.where(np.abs(deg - 90.0) < 45.0, 90, 0)
-    if diagonals:
+    if bins == 16:
+        step = 180.0 / bins
+        fine = (np.round(deg / step).astype(int) % bins) * step
+        four = ((np.round(deg / 45.0).astype(int) % 4) * 45).astype(float)
+        if min_diag > 0:
+            for d in sorted(set(np.unique(fine[mask]).tolist()) - {0.0, 45.0, 90.0, 135.0}):
+                lab, n = ndimage.label((fine == d) & mask)
+                if n:
+                    size = np.bincount(lab.reshape(-1))
+                    fine = np.where((size < min_diag)[lab] & (lab > 0), four, fine)
+        cls = fine
+        if min_diag > 0:
+            for d in (45.0, 135.0):
+                lab, n = ndimage.label((cls == d) & mask)
+                if n:
+                    size = np.bincount(lab.reshape(-1))
+                    cls = np.where((size < min_diag)[lab] & (lab > 0), axis, cls)
+    elif diagonals:
         cls = (np.round(deg / 45.0).astype(int) % 4) * 45
         if min_diag > 0:
             for d in (45, 135):

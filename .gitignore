@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# Experiment runs: records are committed, bulky artifacts stay local (README, "How the
+# cycles are run"). Files already tracked (older runs/repro, out/) are unaffected.
+runs/**/*.npz
+runs/**/history.jsonl
+runs/**/history.jsonl.gz
+runs/**/viewer.html
+runs/**/*.gcode
+runs/**/DONE

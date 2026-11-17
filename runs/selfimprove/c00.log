@@ -1,0 +1,33 @@
+[rltp] sliced 10 layers, grid 122x442 at p=0.1 mm, 382051 cells (3.4s)
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 382051 of 471760 cells filled, infill 41.5% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 10 layers, grid 422x242 at p=0.1 mm, 321796 cells (4.2s)
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 321796 of 397030 cells filled, infill 39.2% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 10 layers, grid 302x402 at p=0.1 mm, 389163 cells (4.4s)
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 389163 of 470720 cells filled, infill 40.3% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 10 layers, grid 182x657 at p=0.1 mm, 447201 cells (5.5s)
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 447201 of 551830 cells filled, infill 38.7% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 10 layers, grid 202x442 at p=0.1 mm, 534507 cells (6.0s)
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 534507 of 661120 cells filled, infill 38.4% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 10 layers, grid 302x402 at p=0.1 mm, 388652 cells (1118.3s)
+[rltp] gradient start: FI_agg 1.0000 against 1.0000 for the stress start; best of 8 starts by score: stress (field model 0.9967 -> 0.9810, rounded 0.9824); starts within 4.2% after rounding; 1106s
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 388652 of 470720 cells filled, infill 40.0% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 10 layers, grid 422x242 at p=0.1 mm, 320276 cells (1222.1s)
+[rltp] gradient start: FI_agg 1.0000 against 1.0000 for the stress start; best of 8 starts by score: stress (field model 0.9829 -> 0.9803, rounded 0.9812); starts within 0.9% after rounding; 1209s
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 320276 of 397030 cells filled, infill 40.3% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 10 layers, grid 122x442 at p=0.1 mm, 379554 cells (1271.3s)
+[rltp] gradient start: FI_agg 1.0000 against 1.0000 for the stress start; best of 8 starts by score: 90 (field model 1.0672 -> 1.0429, rounded 1.0534); starts within 8.3% after rounding; 1260s
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 379554 of 471760 cells filled, infill 40.2% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 10 layers, grid 182x657 at p=0.1 mm, 446060 cells (1747.0s)
+[rltp] gradient start: FI_agg 1.0000 against 1.0000 for the stress start; best of 8 starts by score: 0 (field model 0.9844 -> 0.9799, rounded 0.9794); starts within 0.9% after rounding; 1728s
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 446060 of 551830 cells filled, infill 39.8% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 10 layers, grid 202x442 at p=0.1 mm, 537932 cells (2052.3s)
+[rltp] gradient start: FI_agg 1.0000 against 1.0000 for the stress start; best of 8 starts by score: 0 (field model 0.9625 -> 0.9573, rounded 0.9586); starts within 0.9% after rounding; 2023s
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 537932 of 661120 cells filled, infill 39.9% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] wrote runs/selfimprove/c00/hook/A/part.gcode, viewer.html, history.jsonl, metrics.json (0.8s)
+[rltp] wrote runs/selfimprove/c00/link/A/part.gcode, viewer.html, history.jsonl, metrics.json (0.6s)
+[rltp] wrote runs/selfimprove/c00/bracket/A/part.gcode, viewer.html, history.jsonl, metrics.json (0.5s)
+[rltp] wrote runs/selfimprove/c00/wrench/A/part.gcode, viewer.html, history.jsonl, metrics.json (0.9s)
+[rltp] wrote runs/selfimprove/c00/hook/K/part.gcode, viewer.html, history.jsonl, metrics.json (0.8s)
+[rltp] wrote runs/selfimprove/c00/frame/A/part.gcode, viewer.html, history.jsonl, metrics.json (0.7s)
+[rltp] wrote runs/selfimprove/c00/bracket/K/part.gcode, viewer.html, history.jsonl, metrics.json (0.6s)
+[rltp] wrote runs/selfimprove/c00/link/K/part.gcode, viewer.html, history.jsonl, metrics.json (0.5s)

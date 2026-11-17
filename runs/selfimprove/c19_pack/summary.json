@@ -1,0 +1,284 @@
+[
+ {
+  "part": "frame",
+  "arm": "ADAPT",
+  "start_obj": 0.0,
+  "final_obj": 56.38,
+  "terms": {
+   "total": 56.38181852535539,
+   "strength": 18.663,
+   "time": -5.564,
+   "cont": 26.032,
+   "inter": 4.672,
+   "infill": -1.974,
+   "cover": -2.184,
+   "stiff": 4.913,
+   "bulk": 11.823
+  },
+  "fi_change_pct": -31.15,
+  "case_change_pct_mean": -24.44,
+  "case_change_pct_worst": 0.77,
+  "dir_changed": 0.0991,
+  "fill_changed": 0.1797,
+  "eff_p2": [
+   0.9093,
+   0.9221
+  ],
+  "eff_p8": [
+   0.3845,
+   0.6061
+  ],
+  "aligned_p2": [
+   0.4357,
+   0.499
+  ],
+  "wall_p8": [
+   0.04,
+   0.5948
+  ],
+  "time": [
+   905.0,
+   955.4
+  ],
+  "strokes": [
+   929,
+   810
+  ],
+  "run_min": 156.0
+ },
+ {
+  "part": "frame",
+  "arm": "PACK",
+  "start_obj": 0.0,
+  "final_obj": 64.24,
+  "terms": {
+   "total": 64.24246501384062,
+   "strength": 17.855,
+   "time": -2.931,
+   "cont": 30.372,
+   "inter": 6.969,
+   "infill": 0.02,
+   "cover": -1.995,
+   "stiff": 4.019,
+   "bulk": 9.934
+  },
+  "fi_change_pct": -30.03,
+  "case_change_pct_mean": -23.08,
+  "case_change_pct_worst": 0.94,
+  "dir_changed": 0.0979,
+  "fill_changed": 0.2131,
+  "eff_p2": [
+   0.9093,
+   0.9183
+  ],
+  "eff_p8": [
+   0.3845,
+   0.5312
+  ],
+  "aligned_p2": [
+   0.4357,
+   0.4971
+  ],
+  "wall_p8": [
+   0.04,
+   0.5553
+  ],
+  "time": [
+   905.0,
+   931.5
+  ],
+  "strokes": [
+   929,
+   747
+  ],
+  "run_min": 137.5
+ },
+ {
+  "part": "plate",
+  "arm": "ADAPT",
+  "start_obj": 0.0,
+  "final_obj": 69.9,
+  "terms": {
+   "total": 69.89865382686261,
+   "strength": 25.718,
+   "time": -7.713,
+   "cont": 19.164,
+   "inter": 18.931,
+   "infill": -1.911,
+   "cover": -2.268,
+   "stiff": 4.991,
+   "bulk": 12.986
+  },
+  "fi_change_pct": -40.21,
+  "case_change_pct_mean": -22.67,
+  "case_change_pct_worst": 7.48,
+  "dir_changed": 0.1968,
+  "fill_changed": 0.142,
+  "eff_p2": [
+   0.911,
+   0.9166
+  ],
+  "eff_p8": [
+   0.3636,
+   0.4922
+  ],
+  "aligned_p2": [
+   0.452,
+   0.4913
+  ],
+  "wall_p8": [
+   0.0117,
+   0.331
+  ],
+  "time": [
+   1301.0,
+   1401.4
+  ],
+  "strokes": [
+   1243,
+   1200
+  ],
+  "run_min": 201.8
+ },
+ {
+  "part": "plate",
+  "arm": "PACK",
+  "start_obj": 0.0,
+  "final_obj": 72.66,
+  "terms": {
+   "total": 72.66385655574939,
+   "strength": 25.1,
+   "time": -4.69,
+   "cont": 23.002,
+   "inter": 16.493,
+   "infill": -0.023,
+   "cover": -2.003,
+   "stiff": 3.756,
+   "bulk": 11.029
+  },
+  "fi_change_pct": -39.47,
+  "case_change_pct_mean": -21.62,
+  "case_change_pct_worst": 6.93,
+  "dir_changed": 0.1462,
+  "fill_changed": 0.1632,
+  "eff_p2": [
+   0.911,
+   0.9198
+  ],
+  "eff_p8": [
+   0.3636,
+   0.4868
+  ],
+  "aligned_p2": [
+   0.452,
+   0.5074
+  ],
+  "wall_p8": [
+   0.0117,
+   0.3247
+  ],
+  "time": [
+   1301.0,
+   1362.1
+  ],
+  "strokes": [
+   1243,
+   1163
+  ],
+  "run_min": 175.6
+ },
+ {
+  "part": "wrench",
+  "arm": "ADAPT",
+  "start_obj": 0.0,
+  "final_obj": 61.72,
+  "terms": {
+   "total": 61.718046510191215,
+   "strength": 8.313,
+   "time": -4.981,
+   "cont": 34.461,
+   "inter": 15.019,
+   "infill": -1.949,
+   "cover": -2.124,
+   "stiff": 3.776,
+   "bulk": 9.203
+  },
+  "fi_change_pct": -15.32,
+  "case_change_pct_mean": -10.33,
+  "case_change_pct_worst": 4.23,
+  "dir_changed": 0.1444,
+  "fill_changed": 0.1641,
+  "eff_p2": [
+   0.909,
+   0.9058
+  ],
+  "eff_p8": [
+   0.2773,
+   0.5846
+  ],
+  "aligned_p2": [
+   0.3972,
+   0.4444
+  ],
+  "wall_p8": [
+   0.3385,
+   0.9235
+  ],
+  "time": [
+   845.3,
+   887.4
+  ],
+  "strokes": [
+   735,
+   571
+  ],
+  "run_min": 122.5
+ },
+ {
+  "part": "wrench",
+  "arm": "PACK",
+  "start_obj": 0.0,
+  "final_obj": 63.98,
+  "terms": {
+   "total": 63.97575438063237,
+   "strength": 8.235,
+   "time": -3.087,
+   "cont": 34.913,
+   "inter": 15.826,
+   "infill": 0.048,
+   "cover": -1.986,
+   "stiff": 2.696,
+   "bulk": 7.33
+  },
+  "fi_change_pct": -15.19,
+  "case_change_pct_mean": -9.27,
+  "case_change_pct_worst": 5.24,
+  "dir_changed": 0.1427,
+  "fill_changed": 0.1776,
+  "eff_p2": [
+   0.909,
+   0.9018
+  ],
+  "eff_p8": [
+   0.2773,
+   0.5536
+  ],
+  "aligned_p2": [
+   0.3972,
+   0.4478
+  ],
+  "wall_p8": [
+   0.3385,
+   0.9217
+  ],
+  "time": [
+   845.3,
+   871.4
+  ],
+  "strokes": [
+   735,
+   576
+  ],
+  "run_min": 122.0
+ }
+]

@@ -122,13 +122,14 @@ def dither_ranks(n: int, spacing: int, start: int = 0) -> np.ndarray:
 def fill_sparse(L: Layer, part: np.ndarray, solid: np.ndarray, walls: int, density: float,
                 angle: int, max_spacing: int = 1 << 30, line_angle: int | None = None,
                 orient: np.ndarray | None = None, sweight: np.ndarray | None = None,
-                fill_map: np.ndarray | None = None) -> Layer:
+                fill_map: np.ndarray | None = None, lines: str = "cut") -> Layer:
     """Set up a sparse layer: walls as locked loops, solid cells, and infill lines along rows
     (angle 0) or columns (90) holding a share `density` of the optional cells, at most
     `max_spacing` apart; the filled cells are linked as a zigzag, then repaired. Infill lines
     run at `line_angle` (default `angle`); solid cells zigzag at `angle`. `fill_map` (per
     cell, the gradient layout's density field) lays lines where it exceeds each line's
-    dither threshold instead (dither_ranks)."""
+    dither threshold instead (dither_ranks); with `lines` "whole", each run of a line whole
+    where the field's mean along it does (beads.whole_runs)."""
     H, W = part.shape
     wall = np.zeros_like(part)
     L.mask = part.copy()
@@ -145,9 +146,14 @@ def fill_sparse(L: Layer, part: np.ndarray, solid: np.ndarray, walls: int, densi
     def pick(sel, axis):
         """Cells of `sel` on infill lines: rows (axis 0) or columns (axis 1)."""
         if fill_map is not None and density < 1.0:
-            if axis == 0:
-                return sel & (fill_map > dither_ranks(H, max_spacing)[:, None])
-            return sel & (fill_map > dither_ranks(W, max_spacing)[None, :])
+            from rltp.cover import beads
+            if axis == 0:          # runs along each row only (rows are adjacent on this grid)
+                thr = np.broadcast_to(dither_ranks(H, max_spacing)[:, None], (H, W))
+                st = np.array([[0, 0, 0], [1, 1, 1], [0, 0, 0]])
+            else:
+                thr = np.broadcast_to(dither_ranks(W, max_spacing)[None, :], (H, W))
+                st = np.array([[0, 1, 0], [0, 1, 0], [0, 1, 0]])
+            return beads.whole_runs(sel, fill_map, thr, st) if lines == "whole" else sel & (fill_map > thr)
         d = row_density(sel, density, sweight, max_spacing, axis)
         if axis == 0:
             return np.repeat(line_picks(sel.sum(1), d, max_spacing)[:, None], W, 1) & sel

@@ -1,0 +1,212 @@
+[
+ {
+  "part": "bracket",
+  "arm": "AL",
+  "start_obj": 0.0,
+  "final_obj": 37.32,
+  "terms": {
+   "total": 37.31697301385819,
+   "strength": 1.11,
+   "time": -1.571,
+   "cont": 26.879,
+   "inter": 13.312,
+   "infill": -1.063,
+   "cover": -1.6,
+   "stiff": 0.25
+  },
+  "fi_change_pct": -2.2,
+  "case_change_pct_mean": -2.58,
+  "case_change_pct_worst": 1.54,
+  "dir_changed": 0.0728,
+  "fill_changed": 0.0758,
+  "eff_p2": [
+   0.8531,
+   0.8651
+  ],
+  "eff_p8": [
+   0.3849,
+   0.3945
+  ],
+  "aligned_p2": [
+   0.3484,
+   0.3736
+  ],
+  "time": [
+   339.7,
+   345.0
+  ],
+  "strokes": [
+   162,
+   140
+  ],
+  "run_min": 63.1
+ },
+ {
+  "part": "link",
+  "arm": "AL",
+  "start_obj": 0.0,
+  "final_obj": 45.81,
+  "terms": {
+   "total": 45.81108253217944,
+   "strength": 0.811,
+   "time": -1.491,
+   "cont": 30.271,
+   "inter": 17.767,
+   "infill": -0.345,
+   "cover": -1.399,
+   "stiff": 0.197
+  },
+  "fi_change_pct": -1.61,
+  "case_change_pct_mean": -1.8,
+  "case_change_pct_worst": 1.63,
+  "dir_changed": 0.0565,
+  "fill_changed": 0.0549,
+  "eff_p2": [
+   0.8633,
+   0.8687
+  ],
+  "eff_p8": [
+   0.4674,
+   0.4615
+  ],
+  "aligned_p2": [
+   0.2597,
+   0.2808
+  ],
+  "time": [
+   369.8,
+   375.3
+  ],
+  "strokes": [
+   148,
+   163
+  ],
+  "run_min": 60.7
+ },
+ {
+  "part": "hook",
+  "arm": "AL",
+  "start_obj": 0.0,
+  "final_obj": 40.08,
+  "terms": {
+   "total": 40.08436445246414,
+   "strength": 2.235,
+   "time": -2.817,
+   "cont": 25.629,
+   "inter": 17.243,
+   "infill": -1.038,
+   "cover": -1.831,
+   "stiff": 0.663
+  },
+  "fi_change_pct": -4.37,
+  "case_change_pct_mean": -5.1,
+  "case_change_pct_worst": 0.48,
+  "dir_changed": 0.1269,
+  "fill_changed": 0.1027,
+  "eff_p2": [
+   0.862,
+   0.8686
+  ],
+  "eff_p8": [
+   0.4512,
+   0.4635
+  ],
+  "aligned_p2": [
+   0.2941,
+   0.2966
+  ],
+  "time": [
+   403.5,
+   414.9
+  ],
+  "strokes": [
+   248,
+   199
+  ],
+  "run_min": 57.8
+ },
+ {
+  "part": "frame",
+  "arm": "AL",
+  "start_obj": 0.0,
+  "final_obj": 31.68,
+  "terms": {
+   "total": 31.681565450774855,
+   "strength": 1.006,
+   "time": -2.398,
+   "cont": 25.919,
+   "inter": 7.252,
+   "infill": 0.922,
+   "cover": -1.489,
+   "stiff": 0.469
+  },
+  "fi_change_pct": -1.99,
+  "case_change_pct_mean": -2.09,
+  "case_change_pct_worst": 0.52,
+  "dir_changed": 0.0472,
+  "fill_changed": 0.0778,
+  "eff_p2": [
+   0.8938,
+   0.8943
+  ],
+  "eff_p8": [
+   0.3786,
+   0.3628
+  ],
+  "aligned_p2": [
+   0.303,
+   0.3145
+  ],
+  "time": [
+   512.3,
+   524.6
+  ],
+  "strokes": [
+   295,
+   280
+  ],
+  "run_min": 78.7
+ },
+ {
+  "part": "wrench",
+  "arm": "AL",
+  "start_obj": 0.0,
+  "final_obj": 55.74,
+  "terms": {
+   "total": 55.7379611125523,
+   "strength": 2.673,
+   "time": -4.107,
+   "cont": 21.612,
+   "inter": 36.454,
+   "infill": 0.549,
+   "cover": -2.123,
+   "stiff": 0.681
+  },
+  "fi_change_pct": -5.2,
+  "case_change_pct_mean": -6.53,
+  "case_change_pct_worst": -0.25,
+  "dir_changed": 0.1599,
+  "fill_changed": 0.066,
+  "eff_p2": [
+   0.8392,
+   0.8485
+  ],
+  "eff_p8": [
+   0.3114,
+   0.3349
+  ],
+  "aligned_p2": [
+   0.3043,
+   0.3199
+  ],
+  "time": [
+   493.6,
+   513.9
+  ],
+  "strokes": [
+   208,
+   181
+  ],
+  "run_min": 72.1
+ }
+]

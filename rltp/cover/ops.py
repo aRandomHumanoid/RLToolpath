@@ -31,7 +31,9 @@ OPS = ("reverse", "merge", "split", "flip_right", "flip_down", "move_seam",
        "add_trim", "remove_grow", "fill5_trim", "clear5_grow", "stack9",
        "join", "shift_pos", "shift_neg", "extend", "retract", "refill_0", "refill_90", "clear_w", "stack_w",
        "refill32_0", "refill32_90", "refill64_0", "refill64_90", "flip_region",
-       "refill_45", "refill_135", "refill32_45", "refill32_135", "turn_region")
+       "refill_45", "refill_135", "refill32_45", "refill32_135", "turn_region", "align_region",
+       "anchor", "pack32_0", "pack32_45", "pack32_90", "pack32_135", "pack64_0", "pack64_90",
+       "turn16_pos", "turn16_neg", "lay16", "lay32", "lay64")
 FINE_FIRST = 20          # fine bead-grid edits (rltp.cover.beads) start here
 N_OPS = len(OPS)
 N_PATH_OPS = 10          # operators on a fixed set of filled cells: the policy's action space

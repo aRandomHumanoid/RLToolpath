@@ -27,13 +27,14 @@ layer_change_time: 0.5
 # overlap and bond; skins alternate either way. max_bridge: longest span (mm) a filled cell
 # may bridge over the layer below. walls: 0, solid_layers: 0, infill: 1 fills every cell
 # (the original mode).
-walls: 2
-solid_layers: 3
+walls: 1
+solid_layers: 2
 infill: 0.4
 infill_rule: both
 infill_band: 0.02
 infill_weight: 1.0
 infill_pattern: stacked
+infill_lines: cut          # gradient starts: lines start/stop with the density field (ends anchored), or whole
 max_bridge: 4.0
 # Grid cell in mm. Below bead_width, beads (still bead_width wide) sit anywhere on this finer
 # grid, and walls follow the true outline to one cell; cells per bead must be even. 0 = one

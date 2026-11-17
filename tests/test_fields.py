@@ -19,13 +19,16 @@ def _loads():
     return LoadSpec([Region(circle=[2.5, 10, 2.0])], [Load2D(Region(circle=[13, 2.5, 2.0]), (0, -60))])
 
 
-def _coarse_part(start="stress", infill=0.3):
+def _coarse_part(start="stress", infill=0.3, random_cases=0, coarsen=1, band=0.0):
     g = box(0, 0, 16, 5).union(box(0, 0, 5, 12)).difference(Point(13, 2.5).buffer(1.2))
     m = trimesh.creation.extrude_polygon(g, height=1.2)
     pr = Printer(walls=2, solid_layers=1, infill=infill, max_bridge=2.0, infill_rule="free",
                  infill_pattern="stacked", start=start)
-    return build_part(m, PartSpec(pr, _loads(), terms=("strength", "time", "cont"), score=ScoreConfig()),
-                      baseline="zigzag")
+    loads = _loads()
+    loads.random_cases = random_cases
+    loads.random_moments = random_cases
+    return build_part(m, PartSpec(pr, loads, terms=("strength", "time", "cont"),
+                                  score=ScoreConfig(fea_coarsen=coarsen, clamp_band=band)), baseline="zigzag")
 
 
 def _fine_bracket(start, fields=None):
@@ -82,8 +85,12 @@ def test_field_model_matches_the_evaluator_on_a_fine_grid():
     assert m.evaluate(th, rho, False).fi_agg == pytest.approx(part.breakdown()["fi_agg"], rel=0.03)
 
 
-def test_field_gradient_matches_finite_differences():
-    part = _coarse_part()
+@pytest.mark.parametrize("random_cases,coarsen,band", [(0, 1, 0.0), (3, 1, 0.0), (3, 2, 0.0), (3, 2, 1.0)])
+def test_field_gradient_matches_finite_differences(random_cases, coarsen, band):
+    """Also with random edge force and moment cases, each solved with its own supports, on a
+    mesh of 2 x 2 cells per element, and with the clamp band left out."""
+    part = _coarse_part(random_cases=random_cases, coarsen=coarsen, band=band)
+    assert len(part.lam.systems) == len({tuple(map(id, s)) for s in part.spec.loads.case_supports})
     m, th, rho, _ = _start_fields(part)
     ev = m.evaluate(th, rho)
     for name, g in (("theta", ev.g_theta), ("rho", ev.g_rho)):
@@ -95,6 +102,29 @@ def test_field_gradient_matches_finite_differences():
             Jp = (m.evaluate(a, rho, False) if name == "theta" else m.evaluate(th, a, False)).J
             Jm = (m.evaluate(b, rho, False) if name == "theta" else m.evaluate(th, b, False)).J
             assert g[i] == pytest.approx((Jp - Jm) / (2 * h), rel=1e-3)
+    # the bulk term (p = 2 aggregate, its own case scales) by a second adjoint
+    mb = FieldModel(part, bulk=True)
+    eb = mb.evaluate(th, rho)
+    assert eb.J == pytest.approx(ev.J, rel=1e-12) and eb.J2 > 0
+    for name, g in (("theta", eb.g_theta_b), ("rho", eb.g_rho_b)):
+        for i in np.argsort(-np.abs(g))[:3]:
+            h = 1e-5
+            a, b = (th.copy(), th.copy()) if name == "theta" else (rho.copy(), rho.copy())
+            a[i] += h
+            b[i] -= h
+            Jp = (mb.evaluate(a, rho, False) if name == "theta" else mb.evaluate(th, a, False)).J2
+            Jm = (mb.evaluate(b, rho, False) if name == "theta" else mb.evaluate(th, b, False)).J2
+            assert g[i] == pytest.approx((Jp - Jm) / (2 * h), rel=1e-3)
+    # the stiffness term (compliance relative to the start, self-adjoint)
+    for name, g in (("theta", ev.g_theta_s), ("rho", ev.g_rho_s)):
+        for i in np.argsort(-np.abs(g))[:3]:
+            h = 1e-5
+            a, b = (th.copy(), th.copy()) if name == "theta" else (rho.copy(), rho.copy())
+            a[i] += h
+            b[i] -= h
+            Sp = (m.evaluate(a, rho, False) if name == "theta" else m.evaluate(th, a, False)).stiff
+            Sm = (m.evaluate(b, rho, False) if name == "theta" else m.evaluate(th, b, False)).stiff
+            assert g[i] == pytest.approx((Sp - Sm) / (2 * h), rel=1e-3)
 
 
 def test_optimize_fields_lowers_fi_and_holds_the_infill():
@@ -126,23 +156,35 @@ def test_dither_ranks_nest_and_keep_the_sparsest_lines():
 
 
 def test_fill_map_puts_lines_where_the_field_is_dense():
-    """A fill map dense on the left and sparse on the right lays more lines on the left,
-    keeps the support rule, and averages to the map's mean."""
+    """A fill map dense in the lower rows and sparse above lays more lines below, within
+    the support rule's spacing. A map that changes along the lines starts and stops lines
+    with it (lines "cut"), or lays each run of a line whole or not at all ("whole")."""
+    from scipy import ndimage
     part = _coarse_part("slicer", infill=0.3)
     pr = part.spec.printer
     from rltp.cover.shell import fill_sparse, solid_masks, support_radius
     L = part.layers[2]
     part_m = L.part.copy()
-    fmap = np.where(np.arange(L.W)[None, :] < L.W // 3, 0.8, 0.1) * np.ones((L.H, 1))
+    rows = np.arange(L.H)[:, None]
+    fmap = np.where(rows < L.H // 3, 0.8, 0.1) * np.ones((1, L.W))
     radius = support_radius(pr.max_bridge, L.frame.p)
     solids = solid_masks([X.part for X in part.layers], pr.solid_layers)
     fill_sparse(L, part_m, solids[2], pr.walls, 0.3, 0, 2 * radius, 0, None, None, fmap)
     opt = L.part & ~L.req
-    left = opt & (np.arange(L.W)[None, :] < L.W // 3)
-    right = opt & ~left
-    assert (L.mask & left).sum() / left.sum() > 0.6
-    assert (L.mask & right).sum() / right.sum() < 0.35          # the sparsest lines: every 4th row
+    low = opt & (rows < L.H // 3)
+    high = opt & ~low
+    assert (L.mask & low).sum() / low.sum() > 0.6
+    assert (L.mask & high).sum() / high.sum() < 0.35            # the sparsest lines: every 4th row
     assert check_invariants(L) == []
+    along = np.where(np.arange(L.W)[None, :] < L.W // 3, 0.8, 0.1) * np.ones((L.H, 1))
+    for lines in ("cut", "whole"):
+        fill_sparse(L, part_m, solids[2], pr.walls, 0.3, 0, 2 * radius, 0, None, None, along, lines)
+        opt = L.part & ~L.req
+        lab, n = ndimage.label(opt, np.array([[0, 0, 0], [1, 1, 1], [0, 0, 0]]))
+        laid = [L.mask[lab == i] for i in range(1, n + 1)]
+        whole = all(r.all() or not r.any() for r in laid)
+        assert whole == (lines == "whole") and any(r.all() for r in laid)
+        assert check_invariants(L) == []
 
 
 def test_gradient_start_is_stronger_than_the_stress_start():
@@ -154,6 +196,7 @@ def test_gradient_start_is_stronger_than_the_stress_start():
     assert si["stress_start_fi"] == pytest.approx(stress.breakdown()["fi_agg"], rel=1e-9)
     b = grad.breakdown()
     assert b["unsupported"] == 0 and abs(b["infill_pct"] - 40) < 8
+    assert b["free_ends"] == 0                   # infill lines laid whole, ends anchored
     for L in grad.layers:
         assert check_invariants(L) == []
     assert unsupported(grad.layers, grad.support) == [0] * len(grad.layers)

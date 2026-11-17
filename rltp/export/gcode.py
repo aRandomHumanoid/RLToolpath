@@ -65,7 +65,11 @@ def layer_strokes_world(L, ev, offset):
         seq = np.append(cells, cells[0]) if loop else cells
         if poly is not None and len(cells) > 1:
             seq = poly[pid][0]
-        x, y = L.frame.cell_xy(seq, L.W)
+        if poly is not None and len(cells) > 1 and len(poly[pid]) > 2:    # fitted vertices (fit mode)
+            V = poly[pid][2]
+            x, y = L.frame.to_world((V[:, 0] + 0.5) * L.frame.p, (V[:, 1] + 0.5) * L.frame.p)
+        else:
+            x, y = L.frame.cell_xy(seq, L.W)
         out.append((np.stack([x, y], 1) + offset, loop, len(cells) == 1))
     return out
 

@@ -1,6 +1,7 @@
 """rltp command line.
 
   rltp baseline part.stl --printer printer.yaml --out out/
+  rltp optimize part.stl --printer printer.yaml --out out/        # no loads: 20 random cases
   rltp optimize part.stl --loads loads.yaml --printer printer.yaml \
                 --policy policy.pt --weights 1.0,0.3,0.3 --out out/
   rltp train --config train.yaml --out runs/exp01/
@@ -20,9 +21,10 @@ from pathlib import Path
 import numpy as np
 
 from rltp.config import TERMS, PartSpec, load_loads, load_printer, parse_weights, _from_dict, \
-    Material, BondModel, LoadSpec, ScoreConfig
+    Material, BondModel, LoadSpec, ScoreConfig, parse_load_weights
 
 log = logging.getLogger("rltp")
+NO_LOADS_CASES = (10, 10)      # random force and moment cases when no loads.yaml is given
 
 
 def _say(msg: str) -> None:
@@ -39,7 +41,7 @@ def _spec(args, weights) -> PartSpec:
         if "bond" in extra:
             pr.bond = _from_dict(BondModel, {**asdict(pr.bond), **extra["bond"]})
     for key in ("walls", "solid_layers", "infill", "max_bridge", "infill_rule", "infill_band", "infill_weight",
-                "infill_pattern", "fea_element", "cell", "cover_weight", "start"):
+                "infill_pattern", "infill_lines", "fea_element", "cell", "cover_weight", "start"):
         if getattr(args, key, None) is not None:
             setattr(pr, key, type(getattr(pr, key))(getattr(args, key)))
     n_given = len(args.weights.split(",")) if getattr(args, "weights", None) else 0
@@ -56,8 +58,21 @@ def _spec(args, weights) -> PartSpec:
         weights[4] = 0.0
     if getattr(args, "load_cases", None) is not None:
         loads.random_cases = args.load_cases
+    if getattr(args, "z_fi", None) is not None:
+        pr.bond = _from_dict(BondModel, {**asdict(pr.bond), "fi": args.z_fi})
+    if getattr(args, "load_moments", None) is not None:
+        loads.random_moments = args.load_moments
     if getattr(args, "load_seed", None) is not None:
         loads.random_seed = args.load_seed
+    if getattr(args, "load_mode", None) is not None:
+        loads.random_mode = args.load_mode
+    if getattr(args, "load_weights", None) is not None:
+        loads.random_weights = parse_load_weights(args.load_weights)
+    if (not getattr(args, "loads", None) and getattr(args, "load_cases", None) is None
+            and getattr(args, "load_moments", None) is None):
+        loads.random_cases, loads.random_moments = NO_LOADS_CASES
+        _say(f"no loads.yaml: strength over {NO_LOADS_CASES[0]} random force and {NO_LOADS_CASES[1]} "
+             f"random moment cases, none special (--load-cases/--load-moments to change)")
     terms = [t for t, wt in zip(TERMS, weights) if wt > 0]
     if "strength" in terms and not loads.has_2d:
         _say("no supports/loads in the load spec: strength term disabled")
@@ -69,13 +84,32 @@ def _spec(args, weights) -> PartSpec:
     return PartSpec(printer=pr, loads=loads, terms=tuple(terms),
                     score=ScoreConfig(norm=getattr(args, "norm", "relative"),
                                       stack=getattr(args, "stack", None) or "auto",
-                                      fea_refine=_refine(pr),
-                                      solver=getattr(args, "solver", None) or "fast"))
+                                      fea_refine=_refine(pr), fea_coarsen=_coarsen(pr),
+                                      clamp_band=getattr(args, "clamp_band", None) or 0.0,
+                                      c_free_end=_free_end_cost(args),
+                                      solver=getattr(args, "solver", None) or "fast",
+                                      directions=getattr(args, "directions", None) or "classes"))
+
+
+def _free_end_cost(args) -> float:
+    v = getattr(args, "free_end_cost", None)
+    return ScoreConfig.c_free_end if v is None else float(v)
+
+
+def _coarsen(pr) -> int:
+    """Cells per FEA element side when printer.fea_element is above the cell size."""
+    if pr.fea_element <= pr.pitch * (1 + 1e-6):
+        return 1
+    c = pr.fea_element / pr.pitch
+    if abs(c - round(c)) > 1e-6:
+        _say(f"fea_element {pr.fea_element} mm isn't a multiple of the {pr.pitch} mm cells; "
+             f"using {pr.pitch * round(c):.3f} mm")
+    return max(int(round(c)), 1)
 
 
 def _refine(pr) -> int:
     """FEA elements per cell side from printer.fea_element (mm; 0 = one per cell)."""
-    if pr.fea_element <= 0:
+    if pr.fea_element <= 0 or _coarsen(pr) > 1:
         return 1
     r = pr.pitch / pr.fea_element
     if abs(r - round(r)) > 1e-6:
@@ -175,10 +209,33 @@ def cmd_baseline(args) -> int:
     return 0
 
 
+def _apply_adapt(args, w) -> None:
+    """--adapt: the settings the self-improvement cycles converged on (README), each one
+    only where the command line leaves it at its default: the gradient start, the clamp
+    band, guided proposals, the stress-guided annealing, and stiffness and bulk weights."""
+    if not getattr(args, "adapt", False):
+        return
+    if args.start is None:
+        args.start = "gradient"
+    if args.clamp_band is None:
+        args.clamp_band = 1.0
+    if args.guide == 0:
+        args.guide = 0.8
+    if args.stress_bias == 0:
+        args.stress_bias = 0.5
+    if args.strength_first == 1.0:
+        args.strength_first = 3.0
+    if w[6] == 0:
+        w[6] = 0.5
+    if w[7] == 0:
+        w[7] = 2.0
+
+
 def cmd_optimize(args) -> int:
     from rltp.loop.optimize import History, LoopConfig, optimize_part
     from rltp.search.sa import make_proposer
     w = parse_weights(args.weights)
+    _apply_adapt(args, w)
     if args.interlayer and w[3] == 0:
         w[3] = 0.3
     spec = _spec(args, w)
@@ -195,7 +252,8 @@ def cmd_optimize(args) -> int:
                      max_passes=args.max_passes, max_evals=args.max_evals, warmup=args.warmup,
                      snapshot_every=args.snapshot_every, seed=args.seed,
                      persist_bans=not args.burst_bans, strength_boost=args.strength_first,
-                     stress_bias=args.stress_bias, reheat=args.reheat)
+                     stress_bias=args.stress_bias, reheat=args.reheat, guide=args.guide,
+                     align=args.align, pack=args.pack, line_bins=args.line_bins)
     chains = None
     if args.chains > 1:
         from rltp.search.chains import load_events, run_chains
@@ -270,7 +328,8 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--loads", required=need_loads, help="loads.yaml")
         p.add_argument("--out", required=True)
         p.add_argument("--weights", default=None,
-                       help="strength,time,continuity[,interlayer] (default 1.0,0.3,0.3)")
+                       help="strength,time,continuity[,interlayer,infill,cover,stiffness,bulk] "
+                            "(default 1.0,0.3,0.3)")
         p.add_argument("--fill", default="zigzag", choices=["zigzag", "zigzag90", "concentric"])
         p.add_argument("--rotate", action="store_true",
                        help="v0.5: rotate each layer's grid to its dominant principal stress")
@@ -297,6 +356,10 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--infill-pattern", default=None, choices=["alternate", "stacked"],
                        help="starting infill lines: alternate 0/90 by layer, or stacked in one direction "
                             "so adjacent layers overlap (printer.yaml: infill_pattern)")
+        p.add_argument("--infill-lines", default=None, choices=["cut", "whole"],
+                       help="gradient starts: infill lines start and stop with the density field, their "
+                            "ends anchored to the next line by T-joints (cut), or each run of a line is "
+                            "laid whole by the field's mean along it (whole; printer.yaml: infill_lines)")
         p.add_argument("--max-bridge", type=float, default=None,
                        help="mm, longest span a filled cell may bridge over the layer below "
                             "(printer.yaml: max_bridge)")
@@ -304,25 +367,56 @@ def build_parser() -> argparse.ArgumentParser:
                        help="in-plane model of the layer stack: split (each layer carries h/height "
                             "of the load), laminate (bonded layers share the strain), auto (default: "
                             "laminate with walls/infill, split otherwise)")
-        p.add_argument("--start", default=None, choices=["slicer", "stress", "stress4", "gradient", "gradient4"],
+        p.add_argument("--start", default=None,
+                       choices=["slicer", "stress", "stress4", "gradient", "gradient4", "gradient16"],
                        help="starting layout: slicer (fixed directions), stress (beads along each "
                             "area's main stress direction, 0/90), stress4 (fine grid: 45/135 too), "
                             "gradient (bead directions and infill density optimised for in-plane "
-                            "strength as fields, then laid out 0/90) or gradient4 (fine grid: 45/135 too)")
+                            "strength as fields, then laid out 0/90), gradient4 (fine grid: 45/135 too) "
+                            "or gradient16 (--directions path: every 11.25 degrees)")
         p.add_argument("--solver", default=None, choices=["fast", "legacy"],
                        help="FEA linear solver: fast (default; symmetric LU, CG to 1e-7) or legacy "
                             "(the original general LU, CG to 1e-9; reproduces earlier runs bit for bit)")
+        p.add_argument("--directions", default=None, choices=["classes", "path"],
+                       help="bead directions the laminate scores: classes (default; 0/45/90/135 from the "
+                            "grid steps, a cell at the worst class it holds, so a curved bead's 0.1 mm jogs "
+                            "count as crosswise material) or path (each bead along its own path: fitted "
+                            "tangents, true-direction stiffness and failure index; fine grids)")
         p.add_argument("--cell", type=float, default=None, metavar="MM",
                        help="grid cell size; below the bead width, beads sit anywhere on the finer grid "
                             "(printer.yaml: cell; 0 = one cell per bead)")
         p.add_argument("--fea-element", type=float, default=None, metavar="MM",
-                       help="strength-analysis element size in mm, dividing the cell size "
-                            "(printer.yaml: fea_element; 0 = one element per cell). Toolpaths are unchanged")
+                       help="strength-analysis element size in mm, dividing the cell size or a multiple of "
+                            "it (printer.yaml: fea_element; 0 = one element per cell). A multiple merges "
+                            "cells into one element: much faster, less sharp at stress peaks. Toolpaths "
+                            "are unchanged")
+        p.add_argument("--z-fi", choices=("quadratic", "ratio"), default=None,
+                       help="interlayer failure index: quadratic (sigma/qZt)^2 + (tau/qSz)^2, the original, or "
+                            "ratio, its square root (linear in load like the in-plane FI), which makes the "
+                            "Z term far less spiky at stacked path ends (printer.yaml bond: fi)")
+        p.add_argument("--free-end-cost", type=float, default=None, metavar="C",
+                       help="continuity cost of each path end no other bead touches, in strokes "
+                            "(default 1: a free end costs as much as an extra stroke; 0: off)")
+        p.add_argument("--clamp-band", type=float, default=None, metavar="MM",
+                       help="leave out of each load case's FI the cells within MM of that case's own "
+                            "support and load regions: the stress singularities where a rigid support or "
+                            "a concentrated load ends, which no toolpath can change (default 0: off)")
         p.add_argument("--load-cases", type=int, default=None, metavar="N",
                        help="add N random load cases (overrides random_cases in loads.yaml); "
                             "strength is then scored on every case against its own baseline")
+        p.add_argument("--load-moments", type=int, default=None, metavar="N",
+                       help="add N random moment cases: fix one outline edge, twist another "
+                            "(overrides random_moments in loads.yaml)")
         p.add_argument("--load-seed", type=int, default=None,
                        help="seed for the random load cases (default 0, or random_seed in loads.yaml)")
+        p.add_argument("--load-weights", default=None, metavar="H,S,A",
+                       help="random edge cases: odds of fixing or loading a round hole, a straight side or "
+                            "an arc (then an edge of that kind by length; default 3,2,1); 'uniform' picks "
+                            "every edge alike, as runs before Nov 15, 2026 (loads.yaml: random_weights)")
+        p.add_argument("--load-mode", choices=("edge", "disc"), default=None,
+                       help="random load cases: edge (default) fixes one random outline edge and loads "
+                            "another; disc puts a small disc load on the outline, using the loads.yaml "
+                            "supports (the cases of runs before edge mode) (loads.yaml: random_mode)")
         p.add_argument("--field-starts", type=int, default=8, metavar="N",
                        help="gradient start: optimise the fields from N starting direction fields (the stress "
                             "map, turned 90 degrees, uniform 0/90/45/135, then random) and keep the best by "
@@ -363,6 +457,24 @@ def build_parser() -> argparse.ArgumentParser:
                         "annealing ends, so directions settle before continuity takes over")
     o.add_argument("--stress-bias", type=float, default=0.0, metavar="F",
                    help="share of proposals placed in proportion to local stress (0..1)")
+    o.add_argument("--adapt", action="store_true",
+                   help="toolpaths that adapt to the loads: --start gradient --clamp-band 1 --guide 0.8 "
+                        "--stress-bias 0.5 --strength-first 3, stiffness weight 0.5 and bulk weight 2 "
+                        "(each unless given)")
+    o.add_argument("--guide", type=float, default=0.0, metavar="F",
+                   help="share of proposals that re-lay a window in its best bead direction, placed where "
+                        "turning beads would lower the failure index most (0..1)")
+    o.add_argument("--align", type=float, default=0.0, metavar="F",
+                   help="share of the guided proposals that re-lay the whole connected area sharing a "
+                        "best direction (align_region) instead of a square window (0..1)")
+    o.add_argument("--pack", type=float, default=0.0, metavar="F",
+                   help="share of the guided proposals that re-lay a window at its infill share with the "
+                        "lines packed where one more unit of infill gains the score most (the field model's "
+                        "density gradient; fine bead grids), so material can gather, e.g. beside walls (0..1)")
+    o.add_argument("--line-bins", type=int, default=4, choices=[4, 16],
+                   help="bead line directions the edits lay: 4 (0/45/90/135) or 16 (every 11.25 degrees; "
+                        "needs --directions path): guided refills lay each window at the best of 16, and "
+                        "turn16 edits turn an area by 11.25 degrees")
     o.add_argument("--burst-bans", action="store_true",
                    help="forget rejected edits after each burst (the original loop) instead of "
                         "keeping them banned until their layer changes")

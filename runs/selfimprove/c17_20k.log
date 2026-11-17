@@ -1,0 +1,6 @@
+[rltp] sliced 10 layers, grid 422x242 at p=0.1 mm, 307078 cells (536.4s)
+[rltp] gradient start: FI_agg 0.9576 against 1.0746 for the stress start; best of 8 starts by score: stress90 (field model 1.0137 -> 0.8680, rounded 0.9210); starts within 5.5% after rounding; 531s
+[rltp] sparse: 1 walls, 3 solid layers, bridges <= 4.0 mm; 307078 of 397030 cells filled, infill 39.8% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] wrote /mnt/c/Users/aling/Documents/GitHub/RLToolpath/runs/selfimprove/c17_20k/hook/ADAPT20K/part.gcode, viewer.html, history.jsonl, metrics.json (0.4s)
+part     arm      start   final    FI%  case% worst% dirchg fillchg     eff2 0->1     eff8 0->1        align2         wall8   strokes   min
+hook     ADAPT20K     0.0    30.4   -4.7   -2.3    5.8  0.137   0.085  0.877->0.892  0.291->0.458  0.411->0.426  0.427->0.553  210->166   24.9

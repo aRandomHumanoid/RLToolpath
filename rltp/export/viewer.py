@@ -5,6 +5,8 @@ Embedded JSON (compact; only in-part cells are stored):
   "v": 1, "meta": {...summary metrics...}, "terms": [...],
   "layers": [{
      "k", "z", "h", "H", "W", "f": [ox, oy, theta, p], "T",
+     "kb"                              cells per bead width (4 on the 0.1 mm bead grid, else 1;
+                                       files written before it existed may lack it: then 1)
      "rle": [start, len, ...]          in-part cells as runs over the flat index r*W+c,
      "nx": "0123..."                   nxt per in-part cell (sorted): 0 none, 1 +1, 2 +W, 3 -1, 4 -W
      "seam": [cell, ...],
@@ -13,6 +15,10 @@ Embedded JSON (compact; only in-part cells are stored):
      "fimax",
      "order": [first cell of each stroke in print order],  (loops start at their seam)
      "ts": [...], "te": [...]          stroke print start / end times
+     "fp": {"n": [...], "v": [...]}    fit mode only (--directions path): the moves each stroke
+                                       prints (rltp.cover.beads._fit_runs), in print order:
+                                       vertex count per stroke, then (column, row) of every
+                                       vertex in hundredths of a cell (node units, as the grid)
   }],
   "hist": null | {
      "n": number of proposals, "ops": [names],
@@ -23,7 +29,13 @@ Embedded JSON (compact; only in-part cells are stored):
                                       index (position in the sorted in-part cell list)
      "chart": {"x": [...], "total": [...], "s": {term: [...]}}  change since start (normalised units)
      "passes": [[iter, pass, total, best], ...], "end": {...}
-  }
+  },
+  "cases": null | [{                   load cases, in LoadSpec.all_cases order (Load cases tab)
+     "kind": "primary" | "case" | "force" | "moment",   loads.yaml's loads, its load_cases, random
+     "sup": [[ring, ...], ...]          each support region clipped to the part: rings of [x, y]
+                                        (world mm; outer and holes, filled even-odd)
+     "loads": [{"poly": [ring, ...], "f": [fx, fy] (N), "m": moment (N mm), "at": [x, y]}]
+  }]
 }
 State "after s proposals" = nearest snapshot of the layer with applied <= s, then every
 diff of that layer with applied <= iter < s.
@@ -128,14 +140,28 @@ def _viewer_nxt(L) -> np.ndarray:
     return nxt
 
 
+def _fitted_paths(L, order) -> dict:
+    """Fit mode: each stroke's printed moves (fitted vertices), in print order."""
+    from rltp.cover.beads import runs
+    poly = runs(L)["poly"]
+    n, v = [], []
+    for pid in order:
+        V = np.asarray(poly[int(pid)][2], float)
+        n.append(int(len(V)))
+        v.append(np.rint(V * 100).astype(np.int64).reshape(-1))
+    return {"n": n, "v": np.concatenate(v).tolist() if v else []}
+
+
 def _layer_data(L, ev) -> dict:
+    from rltp.cover.beads import fit_mode
     cells = np.flatnonzero(L.part_mask.reshape(-1))
     pc = get_pieces(L)
     tm = ev.timing
     T = float(tm.T)
     fi = np.asarray(ev.fea.fi, float)[cells] if ev.fea.fi.size else np.zeros(cells.size)
     fimax = float(fi.max()) if fi.size else 0.0
-    return {
+    extra = {"fp": _fitted_paths(L, tm.order)} if L.kb > 1 and fit_mode(L) else {}
+    return extra | {
         "k": int(L.k), "z": _r(L.z), "h": _r(L.h), "H": int(L.H), "W": int(L.W),
         "f": [_r(L.frame.ox, 6), _r(L.frame.oy, 6), _r(L.frame.theta, 8), _r(L.frame.p, 6)],
         "T": _r(T, 4),
@@ -150,7 +176,7 @@ def _layer_data(L, ev) -> dict:
         "te": [_r(x, 3) for x in tm.stroke_start + tm.stroke_time],
         "n_strokes": int(pc.count),
         "n_cells": int(L.material.sum()),
-        "k": int(L.kb),
+        "kb": int(L.kb),
     }
 
 
@@ -249,6 +275,48 @@ def _hist_data(events: list[dict], layers, cap_points: int = 4000) -> dict | Non
     }
 
 
+def _rings(g, tol: float = 0.02) -> list:
+    """Polygon rings (outer and holes) of a shapely area, simplified, as [[x, y], ...]."""
+    out = []
+    for poly in getattr(g.simplify(tol), "geoms", [g.simplify(tol)]):
+        if poly.is_empty or poly.geom_type != "Polygon":
+            continue
+        for ring in [poly.exterior, *poly.interiors]:
+            out.append([[round(float(x), 3), round(float(y), 3)] for x, y in ring.coords[:-1]])
+    return out
+
+
+def _case_data(part) -> list | None:
+    """Each load case's supports and loads for the viewer: regions clipped to the part
+    outline, forces (N), moments (N mm) and the loaded area's centroid."""
+    import shapely
+    loads = part.spec.loads
+    polys = [L.poly for L in part.layers if getattr(L, "poly", None) is not None]
+    if not loads.has_2d or not polys:
+        return None
+    outline = shapely.union_all(polys).buffer(0.05)
+
+    def clip(r):
+        if r._geom is None:
+            r.resolve(outline.bounds)
+        return r._geom.intersection(outline)
+
+    n0 = 1 if loads.has_primary else 0          # load-agnostic runs have no primary case
+    n_explicit = len([c for c in loads.cases if c])
+    out = []
+    for i, (case, sups) in enumerate(zip(loads.all_cases, loads.case_supports)):
+        kind = "primary" if i < n0 else "case" if i < n0 + n_explicit else \
+            "moment" if any(ld.moment for ld in case) else "force"
+        lds = []
+        for ld in case:
+            g = clip(ld.region)
+            c = g.centroid if not g.is_empty else ld.region._geom.centroid
+            lds.append({"poly": _rings(g), "f": [_r(ld.force[0], 3), _r(ld.force[1], 3)],
+                        "m": _r(ld.moment, 3), "at": [_r(c.x, 3), _r(c.y, 3)]})
+        out.append({"kind": kind, "sup": [_rings(clip(r)) for r in sups], "loads": lds})
+    return out
+
+
 def build_viewer_data(part, events: list[dict] | None = None, meta: dict | None = None) -> dict:
     from rltp.export.state import _jsonable
     layers = [_layer_data(L, ev) for L, ev in zip(part.layers, part.evals)]
@@ -260,6 +328,7 @@ def build_viewer_data(part, events: list[dict] | None = None, meta: dict | None 
         "terms": list(TERMS),
         "layers": layers,
         "hist": _hist_data(events, part.layers) if events else None,
+        "cases": _case_data(part),
     }
 
 

@@ -1,0 +1,21 @@
+[rltp] sliced 10 layers, grid 122x442 at p=0.1 mm, 381368 cells (1172.0s)
+[rltp] gradient start: FI_agg 0.8860 against 1.0124 for the stress start; best of 8 starts by score: random1 (field model 1.0487 -> 0.8658, rounded 0.8556); starts within 23.5% after rounding; 1154s
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 381368 of 471760 cells filled, infill 40.6% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 10 layers, grid 302x402 at p=0.1 mm, 389228 cells (1282.3s)
+[rltp] gradient start: FI_agg 0.9852 against 0.9781 for the stress start; best of 8 starts by score: 45 (field model 0.9883 -> 0.9778, rounded 0.9640); starts within 7.8% after rounding; 1263s
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 389228 of 470720 cells filled, infill 40.1% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 10 layers, grid 422x242 at p=0.1 mm, 325450 cells (1407.5s)
+[rltp] gradient start: FI_agg 0.9548 against 1.4243 for the stress start; best of 8 starts by score: stress90 (field model 1.0001 -> 0.9211, rounded 0.9334); starts within 3.4% after rounding; 1388s
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 325450 of 397030 cells filled, infill 40.2% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 10 layers, grid 182x657 at p=0.1 mm, 446798 cells (2109.9s)
+[rltp] gradient start: FI_agg 0.9643 against 1.2548 for the stress start; best of 8 starts by score: 135 (field model 0.9473 -> 0.8714, rounded 0.8774); starts within 3.0% after rounding; 2082s
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 446798 of 551830 cells filled, infill 39.9% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 10 layers, grid 202x442 at p=0.1 mm, 538400 cells (2828.7s)
+[rltp] gradient start: FI_agg 0.9394 against 1.0441 for the stress start; best of 8 starts by score: 0 (field model 0.9579 -> 0.8790, rounded 0.8989); starts within 6.3% after rounding; 2785s
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 538400 of 661120 cells filled, infill 40.0% of the optional cells (target 40%, rule both), 0 unsupported
+part     arm      start   final    FI%  case% worst% dirchg fillchg     eff2 0->1     eff8 0->1        align2   strokes   min
+bracket  KG         0.0    30.1   -2.6   -1.8    3.8  0.026   0.075  0.917->0.924  0.463->0.494  0.456->0.478  140->123   86.5
+link     KG         0.0    53.6   -0.1    0.1    6.2  0.043   0.059  0.926->0.923  0.459->0.555  0.349->0.358  166->139   81.0
+hook     KG         0.0    34.5   -1.8   -0.4    7.3  0.153   0.090  0.801->0.839  0.253->0.409  0.111->0.221  204->141   83.5
+frame    KG         0.0    33.7   -1.7   -1.2    8.8  0.064   0.078  0.889->0.896  0.395->0.415  0.300->0.319  322->280  126.0
+wrench   KG         0.0    38.6   -6.6   -0.4   47.4  0.155   0.067  0.870->0.865  0.169->0.317  0.250->0.287  252->188  106.3

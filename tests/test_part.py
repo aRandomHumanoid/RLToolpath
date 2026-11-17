@@ -4,7 +4,7 @@ import re
 import numpy as np
 import pytest
 import trimesh
-from shapely.geometry import Point, box
+from shapely.geometry import LineString, Point, box
 
 from rltp.config import Load2D, LoadSpec, PartSpec, PointLoad, Printer, Region
 from rltp.cover.cover import check_invariants, get_pieces
@@ -83,6 +83,9 @@ def test_bond_quality_falls_with_delay():
     fast = eval_interface(itf, t, ends, 5.0, t, ends, BondModel(), Material(), 0.5, 8)
     slow = eval_interface(itf, t, ends, 60.0, t, ends, BondModel(), Material(), 0.5, 8)
     assert slow.S_p > fast.S_p and (slow.q < fast.q).all()
+    # fi "ratio": the inverse strength ratio, the square root of the quadratic index
+    ratio = eval_interface(itf, t, ends, 60.0, t, ends, BondModel(fi="ratio"), Material(), 0.5, 8)
+    assert np.allclose(ratio.fi, np.sqrt(slow.fi)) and np.allclose(ratio.q, slow.q)
 
 
 def test_gcode_volume_and_structure(tmp_path):
@@ -258,7 +261,7 @@ def test_random_cases_are_seeded_and_clear_of_supports():
         loads = LoadSpec.from_dict({"supports": [{"circle": [2.5, 10, 2.0]}],
                                     "loads": [{"region": {"circle": [13, 2.5, 2.0]}, "force": [0, -60]}],
                                     "load_cases": [{"region": {"side": "xmax", "width": 0.5}, "force": [5, 0]}],
-                                    "random_cases": 4, "random_seed": seed})
+                                    "random_cases": 4, "random_seed": seed, "random_mode": "disc"})
         loads.resolve(g.bounds)
         loads.add_random_cases(g, 0.4, g.bounds)
         return loads
@@ -272,6 +275,724 @@ def test_random_cases_are_seeded_and_clear_of_supports():
         assert g.boundary.distance(Point(x, y)) < 1e-6           # on the outline
         assert sup.distance(Point(x, y)) > r                      # off the support
         assert np.hypot(*case[0].force) == pytest.approx(60.0)    # primary's total force
+
+
+def test_outline_edges_split_at_corners_and_tangent_arcs():
+    """Sides, arcs and round holes come out as CAD would have them, even when an arc meets a
+    side tangentially (a stadium) and the slicer's union leaves extra collinear points."""
+    from shapely.geometry import LineString
+    from rltp.slicing.edges import _fits_line, outline_edges
+    L = box(0, 0, 16, 5).union(box(0, 0, 5, 12)).difference(Point(13, 2.5).buffer(1.2))
+    E = outline_edges(L.union(box(0, 0, 3, 3)))             # the union adds collinear points
+    closed = [e for e in E if np.allclose(e[0], e[-1])]
+    sides = [e for e in E if not np.allclose(e[0], e[-1])]
+    assert len(E) == 7 and len(closed) == 1
+    assert sorted(round(LineString(e).length, 6) for e in sides) == [5, 5, 7, 11, 12, 16]
+    assert LineString(closed[0]).length == pytest.approx(2 * np.pi * 1.2, rel=1e-2)
+    stadium = LineString([(0, 0), (10, 0)]).buffer(3).difference(Point(8, 0).buffer(1))
+    E = outline_edges(stadium)
+    lines = [e for e in E if _fits_line(e, 1e-6)]
+    assert len(E) == 5 and len(lines) == 2
+    assert all(LineString(e).length == pytest.approx(10) for e in lines)
+
+
+def _edge_loads(n, seed=0, supports=True, moments=0):
+    g = box(0, 0, 16, 5).union(box(0, 0, 5, 12)).difference(Point(13, 2.5).buffer(1.2))
+    d = {"loads": [{"region": {"circle": [13, 2.5, 2.0]}, "force": [0, -60]}],
+         "random_cases": n, "random_moments": moments, "random_seed": seed}
+    if supports:
+        d["supports"] = [{"circle": [2.5, 10, 2.0]}]
+    loads = LoadSpec.from_dict(d)
+    loads.resolve(g.bounds)
+    loads.add_random_cases(g, 0.4, g.bounds)
+    return g, loads
+
+
+def test_random_edge_cases_fix_one_edge_and_load_another():
+    from shapely.geometry import LineString
+    from rltp.slicing.edges import outline_edges
+    g, a = _edge_loads(8, seed=3)
+    assert a.random_mode == "edge" and a.n_cases == 9 and a.has_2d
+    edges = [np.round(e, 4).tolist() for e in outline_edges(g)]
+    sups = a.case_supports
+    assert sups[0] is a.supports                                   # the primary keeps loads.yaml's
+    for case, sup in zip(a.all_cases[1:], sups[1:]):
+        (ld,) = case
+        (s,) = sup
+        assert ld.region.edge in edges and s.edge in edges and ld.region.edge != s.edge
+        assert LineString(ld.region.edge).length >= 0.8 and ld.region.width == 0.4
+        assert np.hypot(*ld.force) == pytest.approx(60.0)
+    d = a.describe_cases()
+    assert "supports" not in d[0][0] and all("edge" in c[0]["supports"][0] for c in d[1:])
+    assert d == _edge_loads(8, seed=3)[1].describe_cases() != _edge_loads(8, seed=4)[1].describe_cases()
+    # no loads.yaml supports needed: every random case brings its own
+    assert _edge_loads(2, supports=False)[1].has_2d
+    assert _edge_loads(0, supports=False, moments=1)[1].has_2d
+    with pytest.raises(ValueError, match="two outline edges"):
+        LoadSpec(random_cases=1).add_random_cases(Point(0, 0).buffer(3), 0.4, (-3, -3, 3, 3))
+
+
+def test_without_a_primary_every_case_is_random():
+    """Load-agnostic: no loads.yaml loads, so the cases are only the random ones, each with its
+    own supports; the combined FI_agg still starts at 1."""
+    g = box(0, 0, 16, 5).union(box(0, 0, 5, 12)).difference(Point(13, 2.5).buffer(1.2))
+    loads = LoadSpec.from_dict({"random_cases": 3, "random_moments": 2, "random_seed": 1})
+    assert loads.has_primary and loads.n_cases == 1                # nothing drawn yet: the old empty case 0
+    loads.resolve(g.bounds)
+    loads.add_random_cases(g, 0.4, g.bounds)
+    assert not loads.has_primary and loads.n_cases == 5
+    assert len(loads.case_supports) == 5 and all(s is not loads.supports for s in loads.case_supports)
+    assert all("supports" in c[0] for c in loads.describe_cases())
+    loads = LoadSpec.from_dict({"random_cases": 3, "random_moments": 2, "random_seed": 1})
+    part = build_part(bracket_mesh(), PartSpec(Printer(), loads, terms=("strength", "time", "cont")),
+                      baseline="zigzag")
+    b = part.breakdown()
+    assert len(b["case_fi_agg"]) == 5 and b["fi_agg"] == pytest.approx(1.0, abs=1e-12)
+    for _ in _random_edits([part], 20):
+        pass
+    assert part.full_recheck() < 1e-6
+
+
+def test_edge_kinds():
+    from rltp.slicing.edges import edge_kind, outline_edges
+    link = (LineString([(0, 0), (30, 0)]).buffer(5).difference(Point(0, 0).buffer(2))
+            .difference(Point(30, 0).buffer(2)))
+    kinds = sorted(edge_kind(e, link) for e in outline_edges(link) if LineString(e).length >= 0.8)
+    assert kinds == ["arc", "arc", "hole", "hole", "side", "side"]       # (as the random cases see them)
+    disc = Point(0, 0).buffer(3)
+    assert [edge_kind(e, disc) for e in outline_edges(disc)] == ["arc"]      # a round outline isn't a hole
+
+
+def _drawn(g, weights, n=400, seed=0):
+    from shapely.geometry import LineString
+    from rltp.slicing.edges import edge_kind
+    loads = LoadSpec(random_cases=n, random_seed=seed, random_weights=weights)
+    loads.resolve(g.bounds)
+    loads.add_random_cases(g, 0.4, g.bounds)
+    out = []
+    for case, (sup,) in zip(loads.generated, loads.generated_supports):
+        e_s, e_l = np.asarray(sup.edge), np.asarray(case[0].region.edge)
+        out.append((edge_kind(e_s, g), LineString(e_s).length, edge_kind(e_l, g), LineString(e_l).length))
+    return out
+
+
+def test_random_edges_follow_kind_odds_then_length():
+    """An edge's kind is drawn with odds random_weights over the kinds the part has, then an
+    edge of that kind by length; the load's edge the same way from the other edges."""
+    link = (LineString([(0, 0), (30, 0)]).buffer(5).difference(Point(0, 0).buffer(2))
+            .difference(Point(30, 0).buffer(2)))
+    d = _drawn(link, (3.0, 2.0, 1.0), n=1500)
+    share = {k: np.mean([x[0] == k for x in d]) for k in ("hole", "side", "arc")}
+    assert share == pytest.approx({"hole": 0.5, "side": 1 / 3, "arc": 1 / 6}, abs=0.04)
+    assert all(x[2] != "arc" for x in _drawn(link, (1.0, 1.0, 0.0)))
+    assert all(x[0] == x[2] == "arc" for x in _drawn(link, (0.0, 0.0, 1.0), n=50))
+    plate = box(0, 0, 20, 5).difference(Point(10, 2.5).buffer(1.0))   # sides 20, 5, 20, 5
+    d = _drawn(plate, (0.0, 1.0, 0.0), n=1500)
+    assert np.mean([x[1] > 10 for x in d]) == pytest.approx(0.8, abs=0.04)
+    with pytest.raises(ValueError, match="leave no edge"):
+        _drawn(plate, (1.0, 0.0, 0.0), n=1)                          # one hole: nothing left to load
+
+
+def test_uniform_load_weights_draw_as_before():
+    """random_weights None draws every edge alike, with the same random numbers as runs before
+    the kind weighting (Nov 15, 2026)."""
+    from rltp.slicing.edges import outline_edges
+    g = box(0, 0, 16, 5).union(box(0, 0, 5, 12)).difference(Point(13, 2.5).buffer(1.2))
+    loads = LoadSpec.from_dict({"random_cases": 5, "random_moments": 3, "random_seed": 7,
+                                "random_weights": "uniform"})
+    assert loads.random_weights is None
+    loads.resolve(g.bounds)
+    loads.add_random_cases(g, 0.4, g.bounds)
+    edges = [np.round(e, 4).tolist() for e in outline_edges(g) if LineString(e).length >= 0.8]
+    rng = np.random.default_rng(7)
+    want = []
+    for i in range(8):
+        s = int(rng.integers(len(edges)))
+        ld = int(rng.integers(len(edges) - 1))
+        want.append((edges[s], edges[ld + (ld >= s)]))
+        rng.uniform(0, 2 * np.pi) if i < 5 else rng.random()
+    got = [(sup[0].edge, case[0].region.edge) for case, sup in zip(loads.generated, loads.generated_supports)]
+    assert got == want
+
+
+def test_consensus_stress_map_follows_free_edges():
+    """Without a primary case the stress map is the cases' consensus: along a straight side that
+    no case holds or loads, every case's stress runs along the edge, and so does the map."""
+    from rltp.eval.stressmap import stress_field
+    from rltp.slicing.raster import make_frame, rasterize
+    link = (LineString([(0, 0), (30, 0)]).buffer(5).difference(Point(0, 0).buffer(2))
+            .difference(Point(30, 0).buffer(2)))
+    loads = LoadSpec(random_cases=6, random_moments=4, random_weights=(1.0, 0.0, 0.0))   # hole to hole
+    loads.resolve(link.bounds)
+    loads.add_random_cases(link, 0.4, link.bounds)
+    frame, H, W = make_frame(link, 0.0, 0.4)
+    mask = rasterize(link, frame, H, W, 3)[0]
+    f = stress_field(mask, frame, PartSpec(Printer(), loads))
+    th = []
+    for j in range(W // 3, 2 * W // 3):
+        rows = np.flatnonzero(mask[:, j])
+        th += [f["theta"][rows[0], j], f["theta"][rows[-1], j]]
+    off = np.degrees(np.abs((np.asarray(th) + np.pi / 2) % np.pi - np.pi / 2))     # from the x axis
+    assert np.median(off) < 10
+    assert f["mag"][mask].min() >= 0
+
+
+def test_random_moment_cases_are_pure_couples():
+    """A moment case puts no net force on its edge, and its forces turn about the loaded
+    nodes' centroid by the case's moment."""
+    from rltp.config import Material
+    from rltp.eval.fea2d import FEAProblem
+    from rltp.slicing.raster import make_frame, rasterize
+    g, loads = _edge_loads(2, seed=5, moments=4)
+    assert loads.n_cases == 7
+    mom = [c[0] for c in loads.all_cases[3:]]
+    assert all(ld.force == (0.0, 0.0) and abs(ld.moment) == pytest.approx(600.0) for ld in mom)
+    assert all("moment" in c[0] for c in loads.describe_cases()[3:])
+    frame, H, W = make_frame(g, 0.0, 0.4)
+    fp = FEAProblem(rasterize(g, frame, H, W, 3)[0], frame, 0.2, Material(), loads, 0.5)
+    nx, ny = frame.node_xy(H, W)
+    nx, ny = nx[fp.used_nodes], ny[fp.used_nodes]
+    for c in range(3, 7):
+        fx, fy = fp.f[0::2, c], fp.f[1::2, c]
+        on = (fx != 0) | (fy != 0)
+        assert on.sum() > 2 and abs(fx.sum()) < 1e-9 and abs(fy.sum()) < 1e-9
+        cx, cy = nx[on].mean(), ny[on].mean()
+        assert ((nx - cx) * fy - (ny - cy) * fx).sum() == pytest.approx(0.5 * mom[c - 3].moment, rel=1e-9)
+
+
+def test_edge_cases_solve_with_their_own_supports():
+    """Each random edge case gets exactly the answer of a one-case problem with its own
+    supports and load, while the primary case keeps the shared supports."""
+    from rltp.config import Material
+    from rltp.eval.fea2d import FEAProblem
+    from rltp.slicing.raster import make_frame, rasterize
+    g, loads = _edge_loads(4, seed=1)
+    frame, H, W = make_frame(g, 0.0, 0.4)
+    mask = rasterize(g, frame, H, W, 3)[0]
+    wh = np.random.default_rng(0).random(H * W)
+    multi = FEAProblem(mask, frame, 0.2, Material(), loads, 1.0)
+    assert len(multi.systems) == len({tuple(map(id, s)) for s in loads.case_supports})
+    rm = multi.solve(wh, direct=True)
+    nfix = []
+    for c, (case, sups) in enumerate(zip(loads.all_cases, loads.case_supports)):
+        one = FEAProblem(mask, frame, 0.2, Material(), LoadSpec(sups, case), 1.0)
+        r1 = one.solve(wh, direct=True)
+        assert np.allclose(rm.u[:, c], r1.u, rtol=1e-9, atol=1e-12 * np.abs(r1.u).max())
+        assert rm.S_pc[c] == pytest.approx(r1.S_p, rel=1e-9)
+        fixed = np.repeat(one.support_nodes, 2)
+        assert np.abs(rm.u[fixed, c]).max() == 0 and np.abs(rm.u[~fixed, c]).max() > 0
+        nfix.append(fixed)
+    assert all((f != nfix[0]).any() for f in nfix[1:])              # every case is held elsewhere
+
+
+def test_edge_cases_incremental_matches_full_recheck():
+    """Dense (one system per layer and set of supports) and sparse (one laminate)."""
+    part = build_part(bracket_mesh(), _case_spec(random_cases=3), baseline="concentric")
+    assert len(part.fea(0).systems) > 1
+    for _ in _random_edits([part], 30):
+        pass
+    assert part.full_recheck() < 1e-6
+    sparse = _sparse_part(loads=_edge_loads(3, moments=2)[1])
+    assert sparse.laminate and len(sparse.lam.systems) > 1
+    for _ in _random_edits([sparse], 30):
+        pass
+    assert sparse.full_recheck() < 1e-6
+
+
+def test_clamp_band_leaves_each_cases_own_supports_and_loads_out():
+    """Cells near a case's own support and load regions drop out of that case's FI only;
+    edits still score incrementally."""
+    from rltp.config import Material, ScoreConfig
+    from rltp.eval.fea2d import FEAProblem
+    from rltp.slicing.raster import make_frame, rasterize
+    g, loads = _edge_loads(3, seed=2, moments=1)
+    frame, H, W = make_frame(g, 0.0, 0.4)
+    mask = rasterize(g, frame, H, W, 3)[0]
+    wh = np.full(H * W, 0.5)
+    a = FEAProblem(mask, frame, 0.2, Material(), loads, 1.0)
+    b = FEAProblem(mask, frame, 0.2, Material(), loads, 1.0, clamp_band=1.0)
+    assert a.keep is None and b.keep.shape == (a.cells.size, loads.n_cases)
+    ra, rb = a.solve(wh, direct=True), b.solve(wh, direct=True)
+    assert (rb.S_pc < ra.S_pc).all() and not b.keep.all(0).any() and b.keep.any(0).all()
+    # a case's kept cells are exactly those beyond 1 mm of its own regions (to a cell)
+    nx, ny = frame.to_world((a.cells % W + 0.5) * 0.4, (a.cells // W + 0.5) * 0.4)
+    from shapely import distance, points, union_all
+    for c, (case, sups) in enumerate(zip(loads.all_cases, loads.case_supports)):
+        d = distance(union_all([r._geom for r in sups] + [ld.region._geom for ld in case]), points(nx, ny))
+        assert (b.keep[d > 1.0 + 0.6, c]).all() and not b.keep[d < 1.0 - 0.6, c].any()
+    part = build_part(bracket_mesh(), _case_spec(random_cases=2, random_moments=1), baseline="concentric")
+    part.spec.score.clamp_band = 1.0
+    part._fea.clear()
+    part.full_recheck()
+    for _ in _random_edits([part], 25):
+        pass
+    assert part.full_recheck() < 1e-6
+
+
+def test_stiffness_term_rewards_beads_along_the_load():
+    """stiff = -log(mean over cases of compliance / start compliance): 0 at the start, scored
+    incrementally, higher with the beads along a pull than across it."""
+    from rltp.eval.fea2d import FEAProblem
+    from rltp.model import Frame
+    terms = ("strength", "time", "cont", "stiff")
+    part = build_part(bracket_mesh(), _case_spec(random_cases=2, random_moments=1), baseline="concentric")
+    part.terms = terms
+    assert part.raw()["stiff"] == pytest.approx(0.0, abs=1e-12) and part.comp0.shape == (4,)
+    for cands in _random_edits([part], 30):
+        pass
+    after = part.raw()["stiff"]
+    part.full_recheck()
+    assert part.raw()["stiff"] == pytest.approx(after, abs=1e-9)
+    from rltp.config import Material
+    H, W = 10, 30
+    g = box(0, 0, 3.0, 1.0)
+    loads = LoadSpec([Region(side="xmin", width=1e-3)], [Load2D(Region(side="xmax", width=1e-3), (5.0, 0))]).resolve(g.bounds)
+    fp = FEAProblem(np.ones((H, W), bool), Frame(0, 0, 0, 0.1), 0.2, Material(), loads, 1.0)
+    along, across = (fp.solve(np.full(H * W, w_), direct=True).comp[0] for w_ in (1.0, 0.0))
+    assert along < across * 0.9
+
+
+def test_starts_share_the_slicer_layouts_case_scales():
+    """With several load cases, a stress start is scored with the slicer layout's case
+    scales and stiffness reference, so its FI_agg compares with the slicer start's (not 1)."""
+    from rltp.config import ScoreConfig
+    g = box(0, 0, 16, 5).union(box(0, 0, 5, 12)).difference(Point(13, 2.5).buffer(1.2))
+    m = trimesh.creation.extrude_polygon(g, height=1.2)
+    parts = {}
+    for start in ("slicer", "stress"):
+        pr = Printer(walls=2, solid_layers=1, infill=0.3, max_bridge=2.0, infill_rule="free", start=start)
+        loads = _edge_loads(2, moments=1)[1]
+        parts[start] = build_part(m, PartSpec(pr, loads, terms=("strength", "time", "cont", "stiff"),
+                                              score=ScoreConfig()), baseline="zigzag")
+    a, b = parts["slicer"], parts["stress"]
+    assert np.allclose(a.case_scale, b.case_scale) and np.allclose(a.comp0, b.comp0)
+    assert a.breakdown()["fi_agg"] == pytest.approx(1.0) and b.breakdown()["fi_agg"] != pytest.approx(1.0, abs=1e-6)
+
+
+def test_bulk_term_scores_the_p2_aggregate_incrementally():
+    """bulk = -ln of the p = 2 aggregate (each case scaled to its start): 0 at the start with
+    several cases, scored incrementally, and lower with the beads across a pull."""
+    part = build_part(bracket_mesh(), _case_spec(random_cases=2, random_moments=1), baseline="concentric")
+    part.terms = ("strength", "time", "cont", "bulk")
+    assert part.raw()["bulk"] == pytest.approx(0.0, abs=1e-9)
+    ds = 0.0
+    for (c,) in _random_edits([part], 30):
+        ds += c.d["bulk"] if c is not None else 0
+    after = part.raw()["bulk"]
+    part.full_recheck()
+    assert part.raw()["bulk"] == pytest.approx(after, abs=1e-9) and after != 0
+    from rltp.config import Material
+    from rltp.eval.fea2d import FEAProblem
+    from rltp.model import Frame
+    H, W = 10, 30
+    g = box(0, 0, 3.0, 1.0)
+    loads = LoadSpec([Region(side="xmin", width=1e-3)], [Load2D(Region(side="xmax", width=1e-3), (5.0, 0))]).resolve(g.bounds)
+    fp = FEAProblem(np.ones((H, W), bool), Frame(0, 0, 0, 0.1), 0.2, Material(), loads, 1.0)
+    along, across = (fp.solve(np.full(H * W, w_), direct=True).S_p2 for w_ in (1.0, 0.0))
+    assert along < 0.6 * across
+
+
+def test_direction_guide_turns_windows_toward_their_best_direction():
+    """The direction map's regret is zero off the bead cells and where a cell already lies
+    in its best direction; a guided action is a refill turned to its window's best direction,
+    and a guided run keeps scoring incrementally."""
+    from rltp.config import ScoreConfig
+    from rltp.cover.ops import OPS, action_mask
+    from rltp.search.guide import DEG, DirectionMap, guided_action
+    pr = Printer(walls=1, solid_layers=1, infill=0.4, max_bridge=2.0, cell=0.1, infill_rule="free")
+    g = box(0, 0, 8, 3).union(box(0, 0, 3, 7))
+    m = trimesh.creation.extrude_polygon(g, height=0.6)
+    loads = LoadSpec([Region(box=[0, 6, 3, 7])], [Load2D(Region(box=[7, 0, 8, 3]), (0, -20))])
+    part = build_part(m, PartSpec(pr, loads, terms=("strength", "time", "cont", "cover"),
+                                  score=ScoreConfig(fea_coarsen=2)), baseline="zigzag")
+    gm = DirectionMap(part)
+    best, regret, mdir = gm.layer(1)
+    assert (regret >= 0).all() and (regret[best < 0] == 0).all() and regret.max() > 0
+    rng = np.random.default_rng(0)
+    M = action_mask(part.layers[1]).reshape(-1)
+    seen = 0
+    for _ in range(20):
+        a = guided_action(part, 1, M, rng, gm)
+        if a is None:
+            continue
+        op, cell = divmod(a, part.layers[1].n)
+        assert OPS[op].startswith("refill") and int(OPS[op].split("_")[1]) in DEG
+        seen += 1
+    assert seen >= 10
+    # align_region: the connected area sharing the cell's best direction, re-laid that way
+    from rltp.cover.ops import InvalidEdit, OP_INDEX, apply
+    L = part.layers[1]
+    done = 0
+    for _ in range(12):
+        a = guided_action(part, 1, M, rng, gm, align=1.0)
+        op, cell = divmod(a, L.n)
+        assert OPS[op] == "align_region"
+        try:
+            N, params = apply(L, op, cell)
+        except InvalidEdit:
+            continue
+        assert check_invariants(N) == [] and params["to"] == DEG[best[cell]]
+        done += 1
+    assert done >= 3
+    cfg = LoopConfig(max_evals=60, burst=8, warmup=8, guide=1.0, align=0.5)
+    optimize_part(part, make_proposer("sa"), np.array([1.0, 0.3, 0.3, 0, 0, 1.0]), cfg)
+    assert part.full_recheck() < 1e-6
+
+
+def test_packed_field_keeps_the_share_and_follows_worth():
+    from rltp.cover.beads import packed_field
+    sel = np.ones((10, 20), bool)
+    sel[:, :2] = False
+    worth = np.tile(np.linspace(0.0, 1.0, 20), (10, 1))
+    f = packed_field(worth, sel, 0.4)
+    assert f[sel].mean() == pytest.approx(0.4, abs=1e-6)
+    assert (f[~sel] == 0).all() and f.max() <= 1.0
+    assert (np.diff(f[0, 2:]) >= -1e-12).all() and f[0, -1] > 2 * f[0, 3]
+    assert (packed_field(np.ones_like(worth), sel, 0.4)[sel] == 0.4).all()
+
+
+def test_pack_gathers_a_windows_infill_where_it_is_worth_most():
+    """No pack edit is valid without a worth map (runs without --pack are unchanged). With
+    one, pack re-lays a window at about its infill share with the material moved toward the
+    valuable side, where a refill spaces it evenly; the worth map is >= 0 and only on optional
+    cells, and a run with pack keeps scoring incrementally."""
+    from rltp.config import ScoreConfig
+    from rltp.cover.ops import OP_INDEX, OPS, apply
+    from rltp.search.fields import FieldModel, layout_fields
+    from rltp.search.guide import WorthMap
+    pr = Printer(walls=1, solid_layers=1, infill=0.4, max_bridge=2.0, cell=0.1, infill_rule="free")
+    m = trimesh.creation.extrude_polygon(box(0, 0, 12, 6), height=0.6)
+    loads = LoadSpec([Region(box=[0, 0, 1, 6])], [Load2D(Region(box=[11, 0, 12, 6]), (0, -20))])
+    part = build_part(m, PartSpec(pr, loads, terms=("strength", "time", "cont", "cover"),
+                                  score=ScoreConfig(fea_coarsen=2)), baseline="zigzag")
+    L = part.layers[1]
+    assert L.part is not None and L.kb > 1
+    packs = [i for i, nm in enumerate(OPS) if nm.startswith("pack")]
+    assert len(packs) == 6 and not action_mask(L)[packs].any()
+    # fields read off the layout: the infill share on the optional cells, the model near the evaluator
+    fm = FieldModel(part)
+    th, rho = layout_fields(part, fm)
+    on = fm.rho_cells
+    assert rho[on].mean() == pytest.approx(0.4, abs=0.06) and (rho >= 0).all() and (rho <= 1).all()
+    assert fm.evaluate(th, rho, grad=False).fi_agg == pytest.approx(part.breakdown()["fi_agg"], rel=0.25)
+    # worth rising with the row: pack moves the window's lines toward high rows, refill doesn't
+    rows = np.mgrid[0:L.H, 0:L.W][0].astype(float)
+    L.ctx["worth"] = rows
+    assert action_mask(L)[packs].any()
+    cell = (L.H // 2) * L.W + L.W // 2
+    r0, c0 = divmod(cell, L.W)
+    win = np.zeros((L.H, L.W), bool)
+    win[max(r0 - 32, 0):r0 + 32, max(c0 - 32, 0):c0 + 32] = True
+    opt = win & L.part & ~L.req
+
+    def share_and_row(N):
+        mat = N.material & opt
+        return mat.sum() / opt.sum(), rows[mat].mean()
+
+    s0, _ = share_and_row(L)
+    Np, _ = apply(L, OP_INDEX["pack64_0"], cell)
+    Nr, _ = apply(L, OP_INDEX["refill64_0"], cell)
+    assert check_invariants(Np) == []
+    (sp, rp), (sr, rr_) = share_and_row(Np), share_and_row(Nr)
+    assert abs(sp - s0) < 0.08 and abs(sr - s0) < 0.08
+    assert rp > rr_ + 3
+    del L.ctx["worth"]
+    # the worth map, and a run with pack
+    wm = WorthMap(part, w=np.array([1.0, 0.3, 0.3, 0, 0, 1.0]))
+    gw = wm.grid()
+    optc = np.zeros(gw.size, bool)
+    for Lk in part.layers:
+        if Lk.part is not None:
+            optc |= (Lk.part & ~Lk.req).reshape(-1)
+    assert (gw >= 0).all() and gw.max() > 0 and (gw.reshape(-1)[~optc] == 0).all()
+    hist = History(None)
+    cfg = LoopConfig(max_evals=80, burst=8, warmup=8, guide=1.0, pack=0.5)
+    optimize_part(part, make_proposer("sa"), np.array([1.0, 0.3, 0.3, 0, 0, 1.0]), cfg, hist)
+    assert part.full_recheck() < 1e-6
+    assert any(e.get("op", "").startswith("pack") for e in hist.events if e.get("type") == "edit")
+
+
+def test_q_basis_reproduces_qbar_at_any_angle():
+    from rltp.config import Material
+    from rltp.eval.fea2d import q_basis, q_matrix, q_rotate
+    Q = q_matrix(Material())
+    M = q_basis(Q)
+    for a in np.linspace(0, np.pi, 13):
+        rec = M[0] + np.cos(2 * a) * M[1] + np.sin(2 * a) * M[2] + np.cos(4 * a) * M[3] + np.sin(4 * a) * M[4]
+        assert np.allclose(rec, q_rotate(Q, a), atol=1e-8 * np.abs(Q).max())
+
+
+def _ring_part(directions):
+    from rltp.config import ScoreConfig
+    pr = Printer(walls=1, solid_layers=1, infill=0.4, max_bridge=2.0, cell=0.1, infill_rule="free")
+    g = Point(0, 0).buffer(5.0, quad_segs=64).difference(Point(0, 0).buffer(2.5, quad_segs=64))
+    m = trimesh.creation.extrude_polygon(g, height=0.6)
+    m.apply_translation([5.0, 5.0, 0])
+    loads = LoadSpec([Region(box=[0, 4.0, 2.6, 6.0])], [Load2D(Region(box=[7.4, 4.0, 10.0, 6.0]), (0, -20))])
+    return build_part(m, PartSpec(pr, loads, terms=("strength", "time", "cont", "cover"),
+                                  score=ScoreConfig(fea_coarsen=2, directions=directions)), baseline="zigzag")
+
+
+def test_path_directions_follow_curves_and_score_incrementally():
+    """--directions path: wall nodes on a ring read the circle's tangent (a few degrees), a
+    straight run reads its axis exactly; the ring's walls (staircases) score lower FI along
+    their paths than as the worst class their steps hold; straight zigzag infill scores
+    about the same either way; edits score incrementally."""
+    from rltp.cover.paths import node_angles
+    from rltp.search.fields import wall_cells
+    parts = {d: _ring_part(d) for d in ("classes", "path")}
+    L = parts["path"].layers[1]
+    a = node_angles(L)
+    nodes = np.flatnonzero(L.flat_mask)
+    wall = wall_cells(L).reshape(-1)[nodes] & ~np.isnan(a[nodes])
+    r, c = np.divmod(nodes[wall], L.W)
+    fr = L.material_frame
+    x, y = fr.to_world((c + 1.0) * fr.p, (r + 1.0) * fr.p)        # nodes sit on cell corners
+    true = (np.arctan2(y - 5.0, x - 5.0) + np.pi / 2) % np.pi
+    err = np.degrees(np.abs((a[nodes[wall]] - true + np.pi / 2) % np.pi - np.pi / 2))
+    assert wall.sum() > 100 and np.median(err) < 3.0 and np.percentile(err, 90) < 8.0
+    # straight runs along x read 0 exactly
+    sx = (np.abs(L.nxt[nodes] - nodes) == 1) & (np.abs(L.prv[nodes] - nodes) == 1)
+    deep = sx.copy()
+    for s in (2, 4, 8):
+        deep &= np.isin(nodes + s, nodes) & np.isin(nodes - s, nodes)
+    if deep.any():
+        assert np.allclose(np.minimum(a[nodes[deep]], np.pi - a[nodes[deep]]), 0.0, atol=1e-9)
+    # the walls' share of sum FI^8 falls when they're read along their paths
+    shares = {}
+    for d, part in parts.items():
+        tot = wsum = 0.0
+        for Lk, ev in zip(part.layers, part.evals):
+            f8 = np.asarray(ev.fea.fi, float) ** 8
+            wsum += f8[wall_cells(Lk).reshape(-1)].sum()
+            tot += f8.sum()
+        shares[d] = wsum / tot
+    assert shares["path"] < shares["classes"]
+    # edits score incrementally in path mode
+    part = parts["path"]
+    for _ in _random_edits([part], 20):
+        pass
+    assert part.full_recheck() < 1e-6
+
+
+def test_path_and_class_scoring_agree_on_straight_infill():
+    """A box of straight zigzag infill (axis lines, rectangular walls) scores within a few
+    percent either way (they differ only where several directions meet in a cell)."""
+    from rltp.config import ScoreConfig
+    pr = Printer(walls=1, solid_layers=1, infill=0.4, max_bridge=2.0, cell=0.1, infill_rule="free")
+    m = trimesh.creation.extrude_polygon(box(0, 0, 12, 6), height=0.6)
+    loads = LoadSpec([Region(box=[0, 0, 1, 6])], [Load2D(Region(box=[11, 0, 12, 6]), (0, -20))])
+    fi = {}
+    for d in ("classes", "path"):
+        part = build_part(m, PartSpec(pr, loads, terms=("strength", "time", "cont", "cover"),
+                                      score=ScoreConfig(fea_coarsen=2, directions=d)), baseline="zigzag")
+        fi[d] = sum(e.fea.S_p for e in part.evals)
+    assert fi["path"] == pytest.approx(fi["classes"], rel=0.15)
+
+
+def _fit_layer(paths):
+    from rltp.cover.cover import link
+    from rltp.model import Frame, Layer
+    H = W = 200
+    L = Layer.empty(0, 0.2, 0.2, np.zeros((H, W), bool), Frame(0, 0, 0, 0.1))
+    L.kb = 4
+    L.aux = {"fit": True}
+    for path in paths:
+        ids = [r * W + c for r, c in path]
+        L.mask.reshape(-1)[ids] = True
+        for a, b in zip(ids[:-1], ids[1:]):
+            link(L, a, b)
+    L.invalidate()
+    return L
+
+
+@pytest.mark.parametrize("deg", [11.25, 22.5, 33.75, 61.0, 101.25])
+def test_fit_mode_prints_a_staircase_as_one_straight_bead(deg):
+    """Fit mode (true directions): a 4-connected staircase along any angle prints as one
+    straight move within 0.1 mm of every node and deposits a straight bead: at most 1 per
+    cell, (length + two half-bead caps) x width in all, shared between the two nearest
+    direction classes by angle."""
+    from rltp.cover.beads import cell_shares, density, runs
+    t = np.radians(deg)
+    ux, uy = np.cos(t), np.sin(t)
+    sx, sy = (1 if ux >= 0 else -1), (1 if uy >= 0 else -1)
+    x = y = 0
+    pts = [(40, 40 if deg < 90 else 160)]
+    for _ in range(150):
+        x, y = min([(x + sx, y), (x, y + sy)], key=lambda q: abs(q[0] * uy - q[1] * ux))
+        pts.append((pts[0][0] + y, pts[0][1] + x))
+    L = _fit_layer([pts])
+    verts, seg, V = runs(L)["poly"][0]
+    assert len(V) == 2 and seg.size == len(pts) - 1
+    d = V[1] - V[0]
+    assert np.degrees(np.arctan2(d[1], d[0])) % 180 == pytest.approx(deg, abs=0.1)   # its true angle
+    for r, c in pts:
+        assert abs(d[0] * (r - V[0, 1]) - d[1] * (c - V[0, 0])) / np.hypot(*d) <= 1.0 + 1e-9
+    D = density(L)
+    assert D.max() <= 1.0 + 1e-9
+    assert D.sum() == pytest.approx((np.hypot(*d) + 4) * 4, rel=0.01)
+    sh = cell_shares(L).reshape(L.H, L.W, 4)[D > 0.99].mean(0)
+    j = int(deg // 45) % 4
+    f = deg / 45 - deg // 45
+    assert sh[j] == pytest.approx(1 - f, abs=0.01) and sh[(j + 1) % 4] == pytest.approx(f, abs=0.01)
+
+
+@pytest.mark.parametrize("deg", [11.25, 33.75, 101.25, 157.5])
+def test_line_set_lays_lines_every_11_25_degrees(deg):
+    """line_set at a 16-bin angle: 4-connected digital lines one bead apart across (the
+    nodes of different lines never 4-adjacent), linked along each line into strokes whose
+    path direction reads the angle (node_angles) and that print as single moves."""
+    from scipy import ndimage
+
+    from rltp.cover.beads import angle_links, line_set, runs
+    from rltp.cover.paths import node_angles
+    sel = np.zeros((200, 200), bool)
+    sel[30:170, 30:170] = True
+    got = line_set(sel, deg, 4, (100, 100), 1.0, 4)
+    lab, n = ndimage.label(got)
+    assert n >= 20
+    L = _fit_layer([])
+    L.mask |= got
+    angle_links(L, got, deg)
+    L.invalidate()
+    pc = get_pieces(L)
+    assert len(pc.cells) == n                     # each line one stroke
+    t = np.radians(deg)
+    r, c = np.divmod(np.flatnonzero(got.reshape(-1)), 200)
+    across = r * np.cos(t) - c * np.sin(t)
+    size = np.bincount(lab[r, c], minlength=n + 1)[1:]
+    per = ndimage.mean(across, lab[r, c], np.arange(1, n + 1))[size >= 60]
+    gaps = np.diff(np.sort(per))
+    assert gaps.size >= 10 and abs(gaps.mean() - 4.0) < 0.02 and np.allclose(gaps, 4.0, atol=0.25)
+    a = node_angles(L)
+    long = [pid for pid, cells in enumerate(pc.cells) if len(cells) > 60]
+    mid = [pc.cells[pid][len(pc.cells[pid]) // 2] for pid in long]
+    err = np.degrees(np.abs((a[mid] - t + np.pi / 2) % np.pi - np.pi / 2))
+    assert long and err.max() < 2.0
+    for pid in long:                              # printed as one move along the line
+        V = runs(L)["poly"][pid][2]
+        assert len(V) == 2
+        seg = np.arctan2(V[1, 1] - V[0, 1], V[1, 0] - V[0, 0])
+        assert np.degrees(abs((seg - t + np.pi / 2) % np.pi - np.pi / 2)) < 0.5
+
+
+def test_dir_fi16_matches_the_four_classes():
+    """The guide's 16-bin failure indices agree with its four-class ones at 0/45/90/135."""
+    from rltp.search.guide import _dir_fi, _dir_fi16
+    part = _ring_part("path")
+    lam = part._lam_problem()
+    f4 = _dir_fi(lam, part.lam_u, lam.case_scale, part.p)
+    f16 = _dir_fi16(lam, part.lam_u, lam.case_scale, part.p)
+    assert np.allclose(f16[:, ::4], f4, rtol=1e-9, atol=1e-12 * f4.max())
+
+
+def test_classes_round_to_16_bins():
+    """classes(bins=16): nearest multiple of 11.25 degrees; small in-between patches fall back
+    to the nearest of the four classes."""
+    from rltp.search.fields import classes
+    th = np.radians(np.full((40, 40), 20.0))
+    th[:3, :3] = np.radians(80.0)                 # a 9-cell patch
+    mask = np.ones((40, 40), bool)
+    cls = classes(th, mask, True, 0, 0, bins=16)
+    assert cls[20, 20] == 22.5 and cls[0, 0] == 78.75
+    cls = classes(th, mask, True, 0, 20, bins=16)
+    assert cls[20, 20] == 22.5 and cls[0, 0] == 90.0
+
+
+def test_line_bins_16_guided_lay_and_turn():
+    """--line-bins 16 (true directions): the guide's lay maps turn on the lay and turn16 edits;
+    guided proposals are lay ops that re-lay a window at its best 11.25-degree bin; turn16
+    turns an area by one bin; edits keep the layer valid and score incrementally."""
+    from rltp.cover.beads import bead_bins, bin_deg
+    from rltp.cover.ops import OPS, InvalidEdit, action_mask, apply
+    from rltp.search.guide import DirectionMap, guided_action
+    part = _ring_part("path")
+    gm = DirectionMap(part)
+    k = 1
+    L = part.layers[k]
+    from rltp.cover.ops import OP_INDEX
+    M0 = action_mask(L)
+    assert not M0[OP_INDEX["lay32"]].any() and not M0[OP_INDEX["turn16_pos"]].any()   # off until attached
+    gm.attach16(k)
+    M = action_mask(L).reshape(-1)
+    rng = np.random.default_rng(0)
+    done = turned = 0
+    for _ in range(24):
+        a = guided_action(part, k, M, rng, gm)
+        if a is None:
+            continue
+        op, cell = divmod(a, L.n)
+        assert OPS[op].startswith("lay")
+        try:
+            N, params = apply(L, op, cell)
+        except InvalidEdit:
+            continue
+        size = int(OPS[op][3:])
+        assert check_invariants(N) == [] and params["to"] == bin_deg(L.ctx["lay"][size].reshape(-1)[cell])
+        done += 1
+    assert done >= 5
+    cells = np.flatnonzero(M.reshape(len(OPS), -1)[OP_INDEX["turn16_pos"]])
+    for cell in rng.choice(cells, 12, replace=False):
+        try:
+            N, params = apply(L, OP_INDEX["turn16_pos"], int(cell))
+        except InvalidEdit:
+            continue
+        assert check_invariants(N) == []
+        assert params["to"] == bin_deg(bead_bins(L).reshape(-1)[cell] + 1)
+        turned += 1
+    assert turned >= 3
+    cfg = LoopConfig(max_evals=60, burst=8, warmup=8, guide=1.0, line_bins=16)
+    optimize_part(part, make_proposer("sa"), np.array([1.0, 0.3, 0.3, 0, 0, 1.0]), cfg)
+    assert part.full_recheck() < 1e-6
+    with pytest.raises(ValueError):
+        optimize_part(_ring_part("classes"), make_proposer("sa"), [1.0], LoopConfig(max_evals=4, line_bins=16))
+
+
+def test_fit_mode_zigzag_and_jog():
+    """Fit mode: a one-cell jog in a straight line is one move; a zigzag of axis lines one
+    bead apart covers its block exactly once (mitred 90-degree turns), as much material as
+    its G-code extrudes; a ring part scored along true directions prints its curved walls
+    in fewer, longer moves and faster than the class scoring's staircases."""
+    from rltp.cover.beads import density, fit_mode, runs
+    jog = [(100, c) for c in range(20, 101)] + [(101, c) for c in range(100, 181)]
+    L = _fit_layer([jog])
+    assert len(runs(L)["poly"][0][0]) == 2
+    assert density(L).sum() == pytest.approx((np.hypot(1, 160) + 4) * 4, rel=1e-3)
+    zz = []
+    for i in range(6):
+        cs = range(20, 181) if i % 2 == 0 else range(180, 19, -1)
+        if i:
+            zz += [(20 + 4 * i - 4 + j, zz[-1][1]) for j in range(1, 4)]
+        zz += [(20 + 4 * i, c) for c in cs]
+    D = density(_fit_layer([zz]))
+    assert D.max() == pytest.approx(1.0) and D[20:40, 20:180].min() == pytest.approx(1.0)
+    assert D.sum() == pytest.approx((6 * 160 + 5 * 4 + 4) * 4)
+    parts = {d: _ring_part(d) for d in ("classes", "path")}
+    assert all(fit_mode(L) for L in parts["path"].layers) and not any(fit_mode(L) for L in parts["classes"].layers)
+    nseg = {d: sum(len(v[0]) - 1 for L in p.layers for v in runs(L)["poly"].values()) for d, p in parts.items()}
+    assert nseg["path"] < 0.7 * nseg["classes"]
+    assert parts["path"].breakdown()["time_s"] < parts["classes"].breakdown()["time_s"]
+
+
+def test_coarse_fea_scores_incrementally_on_a_fine_grid():
+    """0.1 mm cells, 0.4 mm elements: edits still score incrementally, and the start's
+    FI_agg is near the one-element-per-cell analysis (stress peaks are blunter)."""
+    from rltp.config import ScoreConfig
+    pr = Printer(walls=1, solid_layers=1, infill=0.4, max_bridge=2.0, cell=0.1, infill_rule="free")
+    g = box(0, 0, 8, 3).union(box(0, 0, 3, 7))
+    m = trimesh.creation.extrude_polygon(g, height=0.6)
+    loads = LoadSpec([Region(box=[0, 6, 3, 7])], [Load2D(Region(box=[7, 0, 8, 3]), (0, -20))])
+    fi = {}
+    for cf in (1, 4):
+        part = build_part(m, PartSpec(pr, loads, terms=("strength", "time", "cont", "cover"),
+                                      score=ScoreConfig(fea_coarsen=cf)), baseline="zigzag")
+        assert part.lam.cf == cf
+        fi[cf] = part.breakdown()["fi_agg"]
+        if cf == 4:
+            for _ in _random_edits([part], 25):
+                pass
+            assert part.full_recheck() < 1e-6
+    assert fi[4] == pytest.approx(fi[1], rel=0.35)
 
 
 # ------------------------------------------------------------------ sparse layers
@@ -701,6 +1422,74 @@ def test_fine_gcode_extrudes_bead_width():
     vol = st.filament_mm * np.pi * (pr.filament_diameter / 2) ** 2
     material = sum(float(L.density.sum()) * L.material_frame.p ** 2 * L.h for L in part.layers)
     assert vol == pytest.approx(material, rel=0.1)                       # G-code lays what the model counts
+
+
+# ------------------------------------------------------------------ anchoring
+
+def test_whole_runs_lays_each_line_whole_or_not_at_all():
+    """Gradient layouts: a line's run is laid whole when the field's mean along it clears
+    the line's threshold, instead of starting and stopping with the field."""
+    from rltp.cover.beads import whole_runs
+    cand = np.zeros((9, 20), bool)
+    cand[[0, 4, 8], 2:18] = True
+    fill = np.zeros((9, 20))
+    fill[:, 2:10], fill[:, 10:18] = 0.9, 0.1           # mean 0.5 along every run
+    thr = np.zeros((9, 20))
+    thr[0], thr[4], thr[8] = 0.2, 0.45, 0.7
+    out = whole_runs(cand, fill, thr)
+    assert out[0, 2:18].all() and out[4, 2:18].all() and not out[8].any()
+    assert not (out & ~cand).any()
+
+
+def test_cut_line_is_a_free_end_and_anchor_reattaches_it():
+    """Layouts leave no free ends; a line cut short of the wall leaves one, which costs
+    continuity (c_free_end), and the anchor edit extends it back until it touches a bead."""
+    from rltp.cover.beads import anchor_end, free_ends
+    from rltp.cover.ops import OP_INDEX, InvalidEdit, apply
+    part = _fine_part(solid=0, infill=0.4, walls=1)
+    assert part.breakdown()["free_ends"] == 0
+    L = part.layers[1]
+    lock = L.lock.reshape(-1)
+    pc = get_pieces(L)
+    done = 0
+    for seq in [s for s, lp in zip(pc.cells, pc.is_loop) if not lp and not lock[s[0]] and len(s) > 40]:
+        N = L
+        for i in range(15):                              # cut 1.5 mm off the line's end
+            N, _ = apply(N, OP_INDEX["retract"], seq[-1 - i])
+        e = seq[-16]
+        if e not in free_ends(N):
+            continue
+        c = part.propose(1, N)
+        assert c.ev.cont.n_free_ends == part.evals[1].cont.n_free_ends + 1
+        cfg = part.spec.score
+        assert c.ev.cont.C - part.evals[1].cont.C > cfg.c_free_end - 15 * cfg.c_travel
+        N2, prm = apply(N, OP_INDEX["anchor"], e)             # the shorter of straight on or a T-joint
+        assert 0 < prm["added"] <= 15 and free_ends(N2) == [] and check_invariants(N2) == []
+        N3 = N.copy()
+        assert len(anchor_end(N3, e, turns=False)) == 15       # straight on: back to where the line ended
+        assert free_ends(N3) == [] and check_invariants(N3) == []
+        with pytest.raises(InvalidEdit):
+            apply(L, OP_INDEX["anchor"], seq[-1])        # anchored ends don't move
+        done += 1
+    assert done >= 1
+
+
+def test_relays_anchor_the_ends_they_make():
+    from rltp.cover.beads import anchor_end, free_ends
+    from rltp.cover.ops import OP_INDEX, InvalidEdit, apply
+    part = _fine_part(solid=0, infill=0.4, walls=1)
+    L = part.layers[1]
+    rng = np.random.default_rng(0)
+    n = 0
+    for name in ("refill32_90", "refill32_0", "refill_45", "refill64_90"):
+        for _ in range(12):
+            try:
+                N, _ = apply(L, OP_INDEX[name], int(rng.integers(L.n)))
+            except InvalidEdit:
+                continue
+            assert free_ends(N) == [] and check_invariants(N) == []
+            n += 1
+    assert n >= 20
 
 
 # ------------------------------------------------------------------ stress-guided start and search

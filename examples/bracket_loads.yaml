@@ -4,12 +4,14 @@ supports:
   - region: {circle: [4, 25, 3.2]}     # bolt hole + washer, mm
 loads:
   - region: {circle: [34, 4, 3.2]}
-    force: [0, -25]                     # N on the whole part
+    force: [0.00, -33.10]                     # N on the whole part
 # v1.5: 3D point loads for the interlayer statics (mesh coordinates)
 point_loads:
-  - pos: [34, 4, 2.0]
-    force: [0, -25, 4]
+  - pos: [34, 4, 5]
+    force: [0.00, -33.10, 5.30]
 # Extra load cases: strength is then scored on every case against its own baseline,
-# so no single pull is optimized at the others' expense. Same as --load-cases 5.
-# random_cases: 5
+# so no single pull is optimized at the others' expense. Each random case fixes one edge
+# of the outline and pushes (or twists) another. Same as --load-cases 10 --load-moments 10.
+# random_cases: 10
+# random_moments: 10
 # random_seed: 0

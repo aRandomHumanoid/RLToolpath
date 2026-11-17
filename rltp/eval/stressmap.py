@@ -6,6 +6,13 @@ the direction and size of the larger principal stress. It is computed once, befo
 any toolpath exists, so it describes where and which way the part is loaded rather
 than how a particular toolpath carries it.
 
+Without a primary case (load-agnostic: only random cases), every case is solved and
+the map is their consensus: per cell, the doubled-angle sum of the cases' principal
+directions, each case's stresses scaled by its own p = 8 mean so every case counts
+alike. Where the cases agree (along a free edge only the edge-tangent stress survives,
+whatever the load) the map points that way with a large `mag`; where they disagree the
+directions cancel and `mag` is small.
+
 orientation(): which cells want beads along y (True) rather than x, by the sign of
 the stress-weighted, smoothed cos(2 theta), so small low-stress patches follow
 their surroundings.
@@ -28,9 +35,30 @@ def stress_field(mask: np.ndarray, frame, spec) -> dict | None:
     if not fp.active:
         return None
     r = fp.solve(np.full(mask.size, 0.5), direct=True, keep=False)
-    th, mag = principal(r.sx, r.sy, r.txy)
+    if fp.n_cases > 1 and not spec.loads.has_primary:
+        th, mag = consensus(fp, r.u)
+    else:
+        th, mag = principal(r.sx, r.sy, r.txy)
     H, W = mask.shape
     return {"theta": th.reshape(H, W), "mag": np.where(mask, mag.reshape(H, W), 0.0)}
+
+
+def consensus(fp: FEAProblem, u: np.ndarray, p: float = 8.0):
+    """(theta, mag) per cell over every case of a one-element-per-cell problem (see the module
+    docstring): mag^2 (cos 2 theta, sin 2 theta) is the sum over cases of (s_c / ref_c)^2 times
+    the case's own (cos 2 theta_c, sin 2 theta_c), ref_c the p-mean of the case's s_c."""
+    assert fp.r == 1 and fp.cf == 1, "consensus needs one element per cell"
+    eps = np.einsum("jk,ekc->ecj", fp.B0, u[fp.edof])          # (cells, cases, 3)
+    s = eps @ fp.Q0.T                                           # isotropic: any bead direction
+    th_c, mag_c = principal(s[..., 0], s[..., 1], s[..., 2])
+    ref = np.mean(mag_c ** p, 0) ** (1 / p)
+    w = (mag_c / np.where(ref > 0, ref, 1.0)) ** 2 * (ref > 0)
+    C = (w * np.cos(2 * th_c)).sum(1)
+    S = (w * np.sin(2 * th_c)).sum(1)
+    th, mag = np.zeros(fp.n), np.zeros(fp.n)
+    th[fp.cells] = 0.5 * np.arctan2(S, C)
+    mag[fp.cells] = np.sqrt(np.hypot(C, S))
+    return th, mag
 
 
 def orientation(field: dict, window: int) -> np.ndarray:

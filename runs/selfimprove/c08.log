@@ -1,0 +1,16 @@
+[rltp] sliced 10 layers, grid 122x442 at p=0.1 mm, 382051 cells (4.8s)
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 382051 of 471760 cells filled, infill 41.5% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 10 layers, grid 422x242 at p=0.1 mm, 321796 cells (6.0s)
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 321796 of 397030 cells filled, infill 39.2% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 10 layers, grid 302x402 at p=0.1 mm, 389163 cells (6.6s)
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 389163 of 470720 cells filled, infill 40.3% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 10 layers, grid 182x657 at p=0.1 mm, 447201 cells (8.0s)
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 447201 of 551830 cells filled, infill 38.7% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 10 layers, grid 202x442 at p=0.1 mm, 534507 cells (9.1s)
+[rltp] sparse: 2 walls, 3 solid layers, bridges <= 4.0 mm; 534507 of 661120 cells filled, infill 38.4% of the optional cells (target 40%, rule both), 0 unsupported
+part     arm      start   final    FI%  case% worst% dirchg fillchg     eff2 0->1     eff8 0->1        align2   strokes   min
+bracket  GB2        0.0    46.8   -3.0   -3.4    0.9  0.143   0.098  0.853->0.882  0.385->0.461  0.348->0.407  162->128   67.2
+link     GB2        0.0    53.3   -2.6   -2.8    0.9  0.159   0.086  0.863->0.887  0.467->0.492  0.260->0.317  148->144   65.9
+hook     GB2        0.0    44.5   -3.7   -4.6    1.8  0.181   0.133  0.862->0.887  0.451->0.516  0.294->0.363  248->186   61.8
+frame    GB2        0.0    43.4   -4.6   -5.1   -0.6  0.119   0.101  0.894->0.902  0.379->0.401  0.303->0.343  295->266   84.9
+wrench   GB2        0.0    61.0   -6.3   -8.3   -0.4  0.152   0.082  0.839->0.859  0.311->0.358  0.304->0.378  208->183   76.9

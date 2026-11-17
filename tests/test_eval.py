@@ -12,14 +12,37 @@ from rltp.model import Frame, Layer
 from tests.conftest import SHAPES, make_layer
 
 
-def _bar(Lx, Ly, p, mat, force, support="xmin", load="xmax", refine=1):
+def _bar(Lx, Ly, p, mat, force, support="xmin", load="xmax", refine=1, coarsen=1):
     frame = Frame(0.0, 0.0, 0.0, p)
     H, W = int(round(Ly / p)), int(round(Lx / p))
     mask = np.ones((H, W), bool)
     g = box(0, 0, Lx, Ly)
     loads = LoadSpec([Region(side=support, width=1e-3)],
                      [Load2D(Region(side=load, width=1e-3), force)]).resolve(g.bounds)
-    return FEAProblem(mask, frame, 1.0, mat, loads, 1.0, refine=refine), H, W
+    return FEAProblem(mask, frame, 1.0, mat, loads, 1.0, refine=refine, coarsen=coarsen), H, W
+
+
+def test_coarse_mesh_keeps_cell_outputs_and_each_cells_beads():
+    """Merging 4 x 4 cells into one element: uniform tension still gives the fine mesh's
+    stresses and FI, outputs stay one value per cell, and a cell's own beads still set its
+    FI (beads across the pull fail first) even though it shares its element's strain."""
+    mat = Material()
+    a, H, W = _bar(20.0, 4.0, 0.1, mat, (50.0, 0.0))
+    b, _, _ = _bar(20.0, 4.0, 0.1, mat, (50.0, 0.0), coarsen=4)
+    assert b.edof.shape[0] * 16 == a.edof.shape[0]
+    wh = np.ones(H * W)
+    ra, rb = a.solve(wh, direct=True), b.solve(wh, direct=True)
+    assert rb.fi.shape == ra.fi.shape == (H * W,) and rb.N == ra.N == H * W
+    mid = (slice(None), slice(W // 4, 3 * W // 4))
+    assert np.allclose(rb.sx.reshape(H, W)[mid], ra.sx.reshape(H, W)[mid], rtol=0.02)
+    assert np.allclose(rb.fi.reshape(H, W)[mid], ra.fi.reshape(H, W)[mid], rtol=0.02)
+    wh2 = wh.copy().reshape(H, W)
+    wh2[H // 2, W // 2] = 0.0                       # one cell's beads turned across the pull
+    rc = b.solve(wh2.reshape(-1), direct=True)
+    k = (H // 2) * W + W // 2
+    # same strain: E2/E1 of the stress against Yt instead of Xt, 0.79 x 50/28 = 1.41 times the FI
+    assert rc.fi[k] / rc.fi[k + 1] == pytest.approx(mat.E2 / mat.E1 * mat.Xt / mat.Yt, rel=0.03)
+    assert b.support_map().shape == (H * W,) and b.support_map().sum() > 0
 
 
 def _cantilever_tip(refine):

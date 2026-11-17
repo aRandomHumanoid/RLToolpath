@@ -1,0 +1,11 @@
+# Pin-loaded link: bolted at the left hole, pulled 45 degrees off the axis at the right
+# hole. Tension, bending and shear in the shank, bearing around both holes. Second test
+# part for the gradient start (same area, thickness, hole and washer sizes as the bracket).
+supports:
+  - region: {circle: [6, 6, 3.2]}     # bolt hole + washer, mm
+loads:
+  - region: {circle: [38, 6, 3.2]}
+    force: [132.79, -132.79]                 # N on the whole part
+point_loads:
+  - pos: [38, 6, 5]
+    force: [132.79, -132.79, 30.05]

@@ -1,0 +1,16 @@
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 182x657 at p=0.1 mm, 763483 cells (681.2s)
+[rltp] gradient start: FI_agg 0.8283 against 1.1150 for the stress start; best of 8 starts by score: 0 (field model 0.8618 -> 0.6996, rounded 0.7025); starts within 8.0% after rounding; 672s
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 763483 of 1379575 cells filled, infill 40.4% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 25 layers, grid 202x442 at p=0.1 mm, 920013 cells (1028.2s)
+[rltp] gradient start: FI_agg 0.8819 against 1.2023 for the stress start; best of 8 starts by score: 135 (field model 0.8052 -> 0.6264, rounded 0.6280); starts within 4.4% after rounding; 1012s
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 920013 of 1652800 cells filled, infill 40.1% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] sliced 25 layers, grid 282x402 at p=0.1 mm, 1360783 cells (1572.3s)
+[rltp] gradient start: FI_agg 0.7242 against 1.1717 for the stress start; best of 8 starts by score: 90 (field model 0.6630 -> 0.4554, rounded 0.4580); starts within 4.7% after rounding; 1549s
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 1360783 of 2558800 cells filled, infill 40.3% of the optional cells (target 40%, rule both), 197 unsupported
+part     arm      start   final    FI%  case% worst% dirchg fillchg     eff2 0->1     eff8 0->1        align2         wall8   strokes   min
+frame    G16        0.0    76.6  -26.4  -27.1   -7.5  0.246   0.204  0.833->0.837  0.181->0.275  0.467->0.511  0.083->0.467 1703->1292 137.5
+wrench   G16        0.0    54.3  -11.6  -11.5    5.5  0.232   0.162  0.828->0.844  0.178->0.392  0.420->0.442  0.304->0.834 1226->1031 110.3
+plate    G16        0.0    62.6  -30.9  -20.1    1.2  0.229   0.145  0.819->0.831  0.199->0.225  0.487->0.534  0.027->0.185 2214->1991 187.4

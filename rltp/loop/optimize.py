@@ -44,6 +44,13 @@ class LoopConfig:
     persist_bans: bool = True        # False: bans last one burst (the original loop)
     strength_boost: float = 1.0      # strength weight x this at the start, easing to x1 as annealing ends
     stress_bias: float = 0.0         # share of proposals placed by local stress (SA, greedy, random)
+    guide: float = 0.0               # share of proposals re-laying a window in its best direction (rltp.search.guide)
+    align: float = 0.0               # share of those that re-lay the whole area sharing a best direction
+    pack: float = 0.0                # share of guided proposals that pack a window's lines where material
+                                     # is worth most (rltp.search.guide.WorthMap; fine bead grids)
+    pack_every: int = 200            # evaluator calls between refreshes of the worth map
+    line_bins: int = 4               # 16: bead lines every 11.25 degrees (true directions only): guided
+                                     # refills become lay ops at the best of 16 bins, turn16 edits on
     reheat: float = 0.0              # >0: once greedy passes stall, anneal again from reheat x temp0
     reheat_below: float = 0.005      # a greedy pass gaining less than this (weighted score) has stalled
     reheat_after: int = 2            # stalled greedy passes in a row before a reheat
@@ -52,15 +59,17 @@ class LoopConfig:
 class History:
     """history.jsonl: one line per proposed edit, plus snapshot and pass lines."""
 
-    def __init__(self, path=None, snapshot_every: int = 50, terms=TERMS):
+    def __init__(self, path=None, snapshot_every: int = 50, terms=TERMS, keep: bool = True):
         self.path = path
         self.f = open(path, "w") if path else None
+        self.keep = keep                 # False: only the file holds the events (saves memory)
         self.events: list = []
         self.snapshot_every = snapshot_every
         self.accepted_per_layer: dict = {}
 
     def _write(self, rec: dict) -> None:
-        self.events.append(rec)
+        if self.keep:
+            self.events.append(rec)
         if self.f:
             self.f.write(json.dumps(rec, separators=(",", ":")) + "\n")
 
@@ -168,6 +177,25 @@ def optimize_part(part: PartState, proposer, w, cfg: LoopConfig, history: Histor
     temp = temp0
     if hasattr(proposer, "bias"):
         proposer.bias = float(cfg.stress_bias)
+    if hasattr(proposer, "bias"):
+        from rltp.search.guide import DirectionMap
+        proposer.guide = float(cfg.guide)
+        proposer.align = float(cfg.align)
+        proposer.gmap = DirectionMap(part, w=w) if cfg.guide > 0 else None
+        from rltp.search.guide import WorthMap
+        proposer.pack = float(cfg.pack) if cfg.pack > 0 and cfg.guide > 0 else 0.0
+        proposer.wmap = WorthMap(part, w=w, every=cfg.pack_every) if proposer.pack > 0 else None
+    wmap = getattr(proposer, "wmap", None)
+    gmap16 = None
+    if cfg.line_bins == 16:
+        if not getattr(part, "_path", False) or not getattr(part, "fine", False):
+            raise ValueError("16 line bins need a fine grid and --directions path")
+        gmap16 = getattr(proposer, "gmap", None)
+        if gmap16 is None:
+            from rltp.search.guide import DirectionMap
+            gmap16 = DirectionMap(part, w=w)
+    elif cfg.line_bins != 4:
+        raise ValueError(f"line_bins is 4 or 16, not {cfg.line_bins}")
 
     def weights_now(pass_idx: int) -> np.ndarray:
         """Strength-first: the strength weight starts boosted and eases back over the
@@ -200,6 +228,10 @@ def optimize_part(part: PartState, proposer, w, cfg: LoopConfig, history: Histor
                 if part.n_evals >= cfg.max_evals:
                     break
                 L = part.layers[k]
+                if wmap is not None:            # pack edits read the worth map from the layer
+                    wmap.attach(L)
+                if gmap16 is not None:          # lay / turn16 edits read the 16-bin maps
+                    gmap16.attach16(k)
                 M = action_mask(L, ops).reshape(-1)
                 if banned:
                     M[list(banned)] = False
@@ -224,6 +256,8 @@ def optimize_part(part: PartState, proposer, w, cfg: LoopConfig, history: Histor
                        "params": params, "accepted": acc,
                        "d": {t: cand.d[t] for t in TERMS}, "d_total": d, "evals": part.n_evals,
                        "pass": pass_idx}
+                if getattr(proposer, "last_guided", False):
+                    rec["guided"] = True
                 if acc:
                     rec["diff"] = layer_diff(L, cand.layer)
                     part.commit(cand)
