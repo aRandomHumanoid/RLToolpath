@@ -1,0 +1,5 @@
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 282x402 at p=0.1 mm, 1352320 cells (6.4s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 1352320 of 2558800 cells filled, infill 39.7% of the optional cells (target 40%, rule both), 0 unsupported
+[ribbons] plate: 51 ribbons, 198 warp parameters; start +8.0 (FI_agg 0.932, 1146 s, 789 strokes); reference final +19.5; 10 s
+[ribbons] plate: best +8.0 (FI_agg 0.932, 1146 s, 789 strokes, 0 free ends) vs reference final +19.5 (FI_agg 0.491, 1347 s, 1629 strokes); 13 s

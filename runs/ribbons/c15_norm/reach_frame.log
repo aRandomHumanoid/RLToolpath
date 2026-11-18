@@ -1,0 +1,21 @@
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 202x442 at p=0.1 mm, 914363 cells (4.4s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 914363 of 1652800 cells filled, infill 39.3% of the optional cells (target 40%, rule both), 0 unsupported
+frame angle 0 alt 90.0: built in 4 s
+reach 4 uniform                  +67.0  FI 0.876  solid 1.057   317 strokes    740 s  38.7%  s/b/k +6.6/+5.0/+1.9 cont +48.5 time +4.1 cover -0.0 infill -0.6  pieces 126 links 114 anch 20
+reach 4 g0.5:none                +62.7  FI 0.857  solid 1.035   423 strokes    769 s  39.6%  s/b/k +7.7/+5.8/+3.5 cont +43.6 time +0.3 cover -0.7 infill +0.2  pieces 147 links 125 anch 26
+reach 4 g0.5:station             +58.1  FI 0.853  solid 1.023   438 strokes    762 s  40.4%  s/b/k +7.9/+6.7/+2.4 cont +37.9 time +1.2 cover -0.4 infill +0.3  pieces 129 links 105 anch 41
+reach 4 fields:station           +40.5  FI 0.754  solid 0.872   622 strokes    825 s  40.0%  s/b/k +14.1/+8.9/+5.0 cont +20.6 time -6.9 cover -1.1 infill +0.7  pieces 223 links 181 anch 27
+reach 6 uniform                  +67.0  FI 0.876  solid 1.057   317 strokes    740 s  38.7%  s/b/k +6.6/+5.0/+1.9 cont +48.5 time +4.1 cover -0.0 infill -0.6  pieces 126 links 114 anch 20
+reach 6 g0.5:none                +60.5  FI 0.854  solid 1.020   389 strokes    768 s  39.5%  s/b/k +7.9/+5.5/+3.4 cont +42.8 time +0.4 cover -0.7 infill +0.2  pieces 144 links 125 anch 24
+reach 6 g0.5:station             +72.9  FI 0.870  solid 1.053   348 strokes    742 s  39.1%  s/b/k +7.0/+5.7/+2.6 cont +52.4 time +3.9 cover -0.4 infill -0.2  pieces 127 links 112 anch 22
+reach 6 fields:station           +35.6  FI 0.759  solid 0.892   601 strokes    827 s  40.2%  s/b/k +13.8/+10.1/+4.8 cont +23.1 time -7.2 cover -1.3 infill +0.5  pieces 215 links 175 anch 26
+reach 8 uniform                  +66.7  FI 0.875  solid 1.055   307 strokes    742 s  38.8%  s/b/k +6.7/+5.1/+2.0 cont +48.4 time +3.9 cover -0.1 infill -0.5  pieces 126 links 115 anch 18
+reach 8 g0.5:none                +60.2  FI 0.883  solid 1.064   391 strokes    771 s  39.6%  s/b/k +6.2/+5.8/+3.6 cont +42.8 time +0.1 cover -0.8 infill +0.3  pieces 140 links 121 anch 21
+reach 8 g0.5:station             +73.8  FI 0.873  solid 1.052   356 strokes    747 s  40.1%  s/b/k +6.8/+5.8/+2.7 cont +53.6 time +3.2 cover -0.4 infill +0.6  pieces 125 links 109 anch 26
+reach 8 fields:station           +55.0  FI 0.751  solid 0.871   538 strokes    821 s  40.4%  s/b/k +14.3/+9.1/+5.4 cont +34.1 time -6.3 cover -1.3 infill +0.2  pieces 226 links 192 anch 17
+reach 12 uniform                 +67.8  FI 0.875  solid 1.056   296 strokes    744 s  39.0%  s/b/k +6.7/+5.5/+2.3 cont +48.8 time +3.6 cover -0.1 infill -0.3  pieces 126 links 116 anch 16
+reach 12 g0.5:none               +60.2  FI 0.917  solid 1.117   419 strokes    768 s  39.5%  s/b/k +4.3/+5.1/+3.0 cont +45.7 time +0.5 cover -0.8 infill +0.2  pieces 150 links 128 anch 25
+reach 12 g0.5:station            +78.3  FI 0.863  solid 1.035   318 strokes    744 s  39.8%  s/b/k +7.4/+5.4/+2.4 cont +57.3 time +3.6 cover -0.6 infill +0.4  pieces 125 links 113 anch 17
+reach 12 fields:station          +50.5  FI 0.768  solid 0.903   580 strokes    813 s  39.8%  s/b/k +13.2/+9.1/+4.9 cont +31.1 time -5.3 cover -1.3 infill +0.5  pieces 203 links 165 anch 19
+done in 73 s

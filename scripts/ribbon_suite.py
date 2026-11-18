@@ -6,8 +6,8 @@ usage:
       [--parts frame,plate,wrench] [--jobs 1] [--angles frame=0,plate=90,wrench=0]
   python scripts/ribbon_suite.py OUT_DIR --table          (only rebuild the summary)
 
-In an arm's args, {part} is the part's name and {angle} its angle from --angles (the best
-straight start per part), e.g.
+In an arm's args, {part} is the part's name, {angle} its angle from --angles (the best
+straight start per part) and {alt} that angle + 90, e.g.
   --arm 3D="--angle {angle} --z-levels 3 --warm runs/ribbons/c00_baseline/{part}_A/result.json"
 Runs go to OUT_DIR/<part>_<arm>/ with a log each; --jobs runs that many at once (each run's
 workers come from its own args, --workers; mind memory: ~1.4 GB per process plus ~1.5 GB per
@@ -89,7 +89,8 @@ def main() -> None:
         for arm in a.arm:
             name, args = arm.split("=", 1)
             for part in a.parts.split(","):
-                jobs.append((out, part, name, args.format(part=part, angle=angles.get(part, "0"))))
+                ang = angles.get(part, "0")
+                jobs.append((out, part, name, args.format(part=part, angle=ang, alt=f"{(float(ang) + 90) % 180:g}")))
         with ThreadPoolExecutor(max(1, a.jobs)) as ex:
             for name, rc, dt in ex.map(run, jobs):
                 print(f"[suite] {name}: exit {rc}, {dt / 60:.1f} min", flush=True)

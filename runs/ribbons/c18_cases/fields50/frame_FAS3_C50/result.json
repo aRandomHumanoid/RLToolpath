@@ -1,0 +1,211 @@
+{
+ "part": "frame",
+ "settings": {
+  "part": "frame",
+  "out": "runs/ribbons/c17_smooth/fields50/frame_FAS3_C50",
+  "start": "lines",
+  "field_smooth": 1.0,
+  "skin": "slicer",
+  "skin_search": false,
+  "skin_from": null,
+  "skin_ring_count": 0,
+  "skin_rings": false,
+  "angle": 0.0,
+  "density_from": "fields",
+  "density_hi": 0.8,
+  "density_norm": "station",
+  "density_smooth": 3.0,
+  "density_on": "first",
+  "density_cases": 50,
+  "density_mix": 1.0,
+  "density_gamma": null,
+  "alt_angle": 90.0,
+  "families": 0,
+  "warp_per_family": false,
+  "spacing_search": false,
+  "spacing": 1.0,
+  "cross": false,
+  "rings": 0,
+  "ring_gap": 0.4,
+  "alternate": false,
+  "grid": 4.0,
+  "amp": 1.5,
+  "z_levels": 0,
+  "max_lean": 45.0,
+  "warm": null,
+  "sigma": 0.3,
+  "then_local": 0,
+  "local_sigma": 0.5,
+  "optimizer": "cma",
+  "evals": 0,
+  "cases": 0,
+  "popsize": 12,
+  "workers": 1,
+  "seed": 0,
+  "link_passes": 1,
+  "link_reach": null
+ },
+ "ribbons": 53,
+ "warp_parameters": 0,
+ "run_s": 518.6,
+ "slicer": {
+  "objective": 0.0,
+  "fi_agg": 1.0000000000000042,
+  "time_s": 771.6492126796248,
+  "strokes": 696,
+  "free_ends": 0,
+  "infill_pct": 39.32175343133274,
+  "travel_mm": 6422.192380381778,
+  "retractions": 627,
+  "raw": {
+   "strength": -4.218847493575586e-15,
+   "time": -771.6492126796248,
+   "cont": -1511.2740475477221,
+   "inter": -3.4598281876080947,
+   "infill": -0.006782465686672623,
+   "cover": -0.018229481788480155,
+   "stiff": -0.0,
+   "bulk": -1.7763568394002489e-15
+  }
+ },
+ "start": {
+  "objective": {
+   "total": 60.55088767437317,
+   "strength": 10.153,
+   "time": 1.466,
+   "cont": 37.352,
+   "inter": 1.316,
+   "infill": 0.3,
+   "cover": -0.2,
+   "stiff": 2.8,
+   "bulk": 7.365
+  },
+  "fi_agg": 0.8162348984167745,
+  "time_s": 760.3390851748051,
+  "strokes": 413,
+  "free_ends": 0,
+  "infill_pct": 39.621402853352826,
+  "travel_mm": 4170.314627897157,
+  "retractions": 376,
+  "raw": {
+   "strength": 0.2030530997365813,
+   "time": -760.3390851748051,
+   "cont": -946.7893284871448,
+   "inter": -3.4159584473737215,
+   "infill": -0.003785971466471749,
+   "cover": -0.020230215392061955,
+   "stiff": 0.05600437396842473,
+   "bulk": 0.036825291724867655
+  },
+  "layout": [
+   {
+    "pieces": 50,
+    "loops": 0,
+    "links": 39,
+    "anchored": 13,
+    "nodes": 5969,
+    "extra": {}
+   },
+   {
+    "pieces": 83,
+    "loops": 0,
+    "links": 73,
+    "anchored": 18,
+    "nodes": 5576,
+    "extra": {}
+   }
+  ]
+ },
+ "best": {
+  "objective": {
+   "total": 60.55088767437317,
+   "strength": 10.153,
+   "time": 1.466,
+   "cont": 37.352,
+   "inter": 1.316,
+   "infill": 0.3,
+   "cover": -0.2,
+   "stiff": 2.8,
+   "bulk": 7.365
+  },
+  "fi_agg": 0.8162348984167745,
+  "time_s": 760.3390851748051,
+  "strokes": 413,
+  "free_ends": 0,
+  "infill_pct": 39.621402853352826,
+  "travel_mm": 4170.314627897157,
+  "retractions": 376,
+  "raw": {
+   "strength": 0.2030530997365813,
+   "time": -760.3390851748051,
+   "cont": -946.7893284871448,
+   "inter": -3.4159584473737215,
+   "infill": -0.003785971466471749,
+   "cover": -0.020230215392061955,
+   "stiff": 0.05600437396842473,
+   "bulk": 0.036825291724867655
+  },
+  "layout": [
+   {
+    "pieces": 50,
+    "loops": 0,
+    "links": 39,
+    "anchored": 13,
+    "nodes": 5969,
+    "extra": {}
+   },
+   {
+    "pieces": 83,
+    "loops": 0,
+    "links": 73,
+    "anchored": 18,
+    "nodes": 5576,
+    "extra": {}
+   }
+  ],
+  "x": []
+ },
+ "reference": {
+  "gradient_start": {
+   "objective": {
+    "total": -40.31273245035737,
+    "strength": 4.966,
+    "time": -15.983,
+    "cont": -51.264,
+    "inter": 4.885,
+    "infill": 0.477,
+    "cover": -1.386,
+    "stiff": 5.805,
+    "bulk": 12.187
+   },
+   "fi_agg": 0.9054522678583216,
+   "time_s": 894.9822252660216,
+   "strokes": 1450
+  },
+  "final": {
+   "objective": {
+    "total": 61.01057545973164,
+    "strength": 22.894,
+    "time": -15.276,
+    "cont": 8.469,
+    "inter": 13.848,
+    "infill": -1.316,
+    "cover": -2.427,
+    "stiff": 11.056,
+    "bulk": 23.762
+   },
+   "fi_agg": 0.63262172765357,
+   "time_s": 889.5233858857956,
+   "strokes": 940
+  }
+ },
+ "history": [
+  {
+   "evals": 1,
+   "best": 60.55088767437317,
+   "gen_best": 60.55088767437317,
+   "gen_mean": 60.55088767437317,
+   "sigma": 0.3
+  }
+ ]
+}

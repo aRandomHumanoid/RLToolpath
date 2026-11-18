@@ -180,6 +180,162 @@ def test_3d_ribbons_lay_each_layer_from_its_own_height(part):
         assert check_invariants(part.layers[k]) == []
 
 
+def test_streamlines_of_a_uniform_field_are_evenly_spaced_straight_lines():
+    """theta = 30 degrees everywhere on a 10 x 6 mm box: every streamline runs at 30 degrees, and
+    neighbouring lines sit about one spacing apart (Jobard-Lefer: no closer than test x spacing)."""
+    from rltp.model import Frame
+    from rltp.surfaces.ribbons import streamline_family
+    fr = Frame(0.0, 0.0, 0.0, 0.1)
+    region = np.ones((60, 100), bool)
+    th = np.full((60, 100), np.radians(30.0))
+    rbs = streamline_family(th, fr, region, fr, 1.0)
+    assert len(rbs) >= 6
+    for rb in rbs:
+        d = np.diff(rb.xy, axis=0)
+        ang = np.degrees(np.arctan2(d[:, 1], d[:, 0])) % 180
+        assert np.allclose(ang, 30.0, atol=1.0)
+    from scipy.spatial import cKDTree
+    for i, rb in enumerate(rbs):
+        others = np.vstack([r.xy for j, r in enumerate(rbs) if j != i])
+        dmin = cKDTree(others).query(rb.xy)[0].min()
+        assert dmin >= 0.5 - 1e-6
+    # lines across the box's 6 mm, spacing 1: their offsets across the 30-degree direction
+    n = np.array([-np.sin(np.radians(30)), np.cos(np.radians(30))])
+    offs = np.sort([float(rb.xy.mean(0) @ n) for rb in rbs])
+    gaps = np.diff(offs)
+    assert np.median(gaps) == pytest.approx(1.0, abs=0.15)
+
+
+def test_two_families_alternate_by_layer(part):
+    """A pair of ribbon lists: even infill layers get the first, odd layers the second, each layer
+    a valid cover; the fast path scores it like a plain restore."""
+    from rltp.surfaces.layout import apply_layout, unshare_caches
+    ks = [k for k, L in enumerate(part.layers) if is_infill_layer(L)]
+    b = part.layers[ks[0]].poly.bounds
+    pair = (line_family(b, 0.0, 1.0), line_family(b, 90.0, 1.0))
+    snap, stats = layout_snapshot(part, pair)
+    assert len(stats) == 2
+    for i, k in enumerate(ks):
+        same = (snap[k][3] == snap[ks[i % 2]][3]).all()
+        assert same
+    if len(ks) > 1:
+        assert (snap[ks[0]][3] != snap[ks[1]][3]).any()
+    part.restore(snap)
+    want = part.raw()
+    apply_layout(part, pair)
+    got = part.raw()
+    assert all(np.isclose(got[t], want[t], rtol=1e-9, atol=1e-12) for t in want)
+    unshare_caches(part)
+    for k in ks:
+        assert check_invariants(part.layers[k]) == []
+
+
+def test_local_search_moves_few_blocks_and_never_loses_its_best():
+    from rltp.surfaces.cmaes import LocalSearch
+    x0 = np.full(6, 3.0)
+    blocks = [np.array([0, 1]), np.array([2, 3]), np.array([4]), np.array([5])]
+    es = LocalSearch(x0, 0.5, 8, 1, float((x0 ** 2).sum()), blocks)
+    X = es.ask()
+    assert ((X != x0).sum(1) <= 6).all() and ((X != x0).sum(1) >= 1).all()
+    best = es.f
+    for _ in range(600):
+        X = es.ask()
+        es.tell(X, (X ** 2).sum(1))
+        assert es.f <= best
+        best = es.f
+    assert es.f < 1e-4
+
+
+def test_density_family_spaces_lines_by_density():
+    """Constant density: straight lines bead / rho apart. Density 0.8 in y > 0 and 0.2 below:
+    lines four times closer on the dense side, every line continuous across."""
+    from rltp.surfaces.ribbons import density_family
+    rbs = density_family((-10, -10, 10, 10), 0.0, lambda x, y: np.full(np.shape(x), 0.4), 0.4)
+    ys = np.sort([rb.xy[:, 1].mean() for rb in rbs])
+    assert np.allclose(np.diff(ys), 1.0, atol=0.02)
+    assert all(np.ptp(rb.xy[:, 1]) < 1e-6 for rb in rbs)
+    rbs = density_family((-10, -10, 10, 10), 0.0, lambda x, y: np.where(np.asarray(y) > 0, 0.8, 0.2), 0.4)
+    ys = np.sort([rb.xy[:, 1].mean() for rb in rbs])
+    gaps = np.diff(ys)
+    up, down = gaps[ys[1:] > 1.0], gaps[ys[:-1] < -1.0]
+    assert np.median(up) == pytest.approx(0.5, abs=0.05)
+    assert np.median(down) == pytest.approx(2.0, abs=0.1)
+
+
+def _station(rbs, x, lo, hi):
+    """y of every line at station x, and how many cross (lo, hi) there."""
+    ys = np.array([np.interp(x, rb.xy[:, 0], rb.xy[:, 1]) for rb in rbs])
+    return ys, int(((ys > lo) & (ys < hi)).sum())
+
+
+def test_normalised_density_family_keeps_each_cross_section_and_straight_lines_past_the_part():
+    """A part |x| < 8, |y| < 5 with a dense quarter (x > 0, y > 0); uniform 0.4 outside. Raw, the
+    sparse stations draw lines down from above the part, so lines past it bend; normalised, every
+    station of the part holds the uniform count (10 lines at 0.4 / 0.4 mm), gathered toward the
+    dense quarter, and lines past the part stay straight."""
+    from rltp.surfaces.ribbons import density_family
+
+    def inside(x, y):
+        return (np.abs(np.asarray(x)) < 8) & (np.abs(np.asarray(y)) < 5)
+
+    def rho(x, y):
+        x, y = np.asarray(x), np.asarray(y)
+        return np.where(inside(x, y), np.where((x > 0) & (y > 0), 0.8, 0.2), 0.4)
+    b = (-10, -10, 10, 10)
+    raw = density_family(b, 0.0, rho, 0.4)
+    nrm = density_family(b, 0.0, rho, 0.4, inside=inside, level=0.4)
+    above = [rb for rb in raw if np.interp(-9.5, rb.xy[:, 0], rb.xy[:, 1]) > 6]
+    assert max(np.ptp(rb.xy[:, 1]) for rb in above) > 0.5
+    above = [rb for rb in nrm if np.interp(-9.5, rb.xy[:, 0], rb.xy[:, 1]) > 6]
+    assert above and max(np.ptp(rb.xy[:, 1]) for rb in above) < 1e-6
+    for x in (-4.0, 4.0):
+        assert abs(_station(nrm, x, -5, 5)[1] - 10) <= 1
+    ys, _ = _station(nrm, 4.0, -5, 5)
+    assert ((ys > 0) & (ys < 5)).sum() >= 3 * ((ys > -5) & (ys < 0)).sum()
+
+
+def test_segment_normalisation_keeps_lines_on_their_side_of_a_hole():
+    """Two bars (1 < |y| < 5) with the upper one dense at x > 0: per station both bars may trade
+    lines; per segment each bar keeps its own uniform count (4 lines in 4 mm)."""
+    from rltp.surfaces.ribbons import density_family
+
+    def inside(x, y):
+        x, y = np.asarray(x), np.asarray(y)
+        return (np.abs(x) < 8) & (np.abs(y) < 5) & (np.abs(y) > 1)
+
+    def rho(x, y):
+        x, y = np.asarray(x), np.asarray(y)
+        return np.where(inside(x, y), np.where((x > 0) & (y > 0), 0.8, 0.2), 0.4)
+    b = (-10, -10, 10, 10)
+    st = density_family(b, 0.0, rho, 0.4, inside=inside, level=0.4, norm="station")
+    sg = density_family(b, 0.0, rho, 0.4, inside=inside, level=0.4, norm="segment")
+    assert _station(st, 4.0, 1, 5)[1] >= 6                    # the dense bar took lines
+    for x in (-4.0, 4.0):
+        assert abs(_station(sg, x, 1, 5)[1] - 4) <= 1
+        assert abs(_station(sg, x, -5, -1)[1] - 4) <= 1
+    with pytest.raises(ValueError):
+        density_family(b, 0.0, rho, 0.4, inside=inside, level=0.4, norm="bogus")
+
+
+def test_smoothing_along_the_lines_bounds_their_tilt():
+    """A density step across x = 0 makes lines jump sideways there; smoothed 2 mm along the
+    lines, they tilt less than half as steeply, and the contrast across them stays."""
+    from rltp.surfaces.ribbons import density_family
+
+    def rho(x, y):
+        x, y = np.asarray(x), np.asarray(y)
+        return np.where((x > 0) & (np.abs(y) < 3), 0.8, 0.3)
+
+    def steepest(rbs):
+        return max(float(np.max(np.abs(np.diff(rb.xy[:, 1]) / np.diff(rb.xy[:, 0])))) for rb in rbs)
+    b = (-10, -10, 10, 10)
+    raw = density_family(b, 0.0, rho, 0.4)
+    sm = density_family(b, 0.0, rho, 0.4, smooth_along=2.0)
+    assert steepest(sm) < 0.5 * steepest(raw)
+    ys, n_dense = _station(sm, 6.0, -3, 3)
+    assert n_dense >= 2 * _station(sm, -6.0, -3, 3)[1]
+
+
 def test_cmaes_minimises_a_quadratic():
     es = CMAES(np.full(6, 3.0), 1.0, seed=1)
     for _ in range(250):

@@ -1,0 +1,43 @@
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 202x442 at p=0.1 mm, 914363 cells (5.9s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 914363 of 1652800 cells filled, infill 39.3% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 202x442 at p=0.1 mm, 914363 cells (6.4s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 914363 of 1652800 cells filled, infill 39.3% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 202x442 at p=0.1 mm, 914363 cells (5.3s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 914363 of 1652800 cells filled, infill 39.3% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 202x442 at p=0.1 mm, 914363 cells (5.9s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 914363 of 1652800 cells filled, infill 39.3% of the optional cells (target 40%, rule both), 0 unsupported
+points against each seed's slicer layout (FI_agg; strength / bulk / stiffness points)
+frame: seeds 0, 1, 2, 3
+  ref_frame.npz             +61.0 (0.633; s/b/k +23/+24/+11)    +44.9 (0.732; s/b/k +16/+17/+9)    +47.0 (0.667; s/b/k +20/+14/+9)    +47.4 (0.689; s/b/k +19/+16/+9)
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 282x402 at p=0.1 mm, 1352320 cells (8.6s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 1352320 of 2558800 cells filled, infill 39.7% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 282x402 at p=0.1 mm, 1352320 cells (8.0s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 1352320 of 2558800 cells filled, infill 39.7% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 282x402 at p=0.1 mm, 1352320 cells (8.4s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 1352320 of 2558800 cells filled, infill 39.7% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 282x402 at p=0.1 mm, 1352320 cells (8.0s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 1352320 of 2558800 cells filled, infill 39.7% of the optional cells (target 40%, rule both), 0 unsupported
+plate: seeds 0, 1, 2, 3
+  ref_plate.npz             +19.5 (0.491; s/b/k +36/+39/+17)    -16.0 (0.629; s/b/k +23/+20/+14)    -23.9 (0.717; s/b/k +17/+20/+12)    -15.0 (0.616; s/b/k +24/+20/+13)
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 182x657 at p=0.1 mm, 754403 cells (6.2s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 754403 of 1379575 cells filled, infill 39.0% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 182x657 at p=0.1 mm, 754403 cells (6.1s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 754403 of 1379575 cells filled, infill 39.0% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 182x657 at p=0.1 mm, 754403 cells (5.1s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 754403 of 1379575 cells filled, infill 39.0% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 182x657 at p=0.1 mm, 754403 cells (6.0s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 754403 of 1379575 cells filled, infill 39.0% of the optional cells (target 40%, rule both), 0 unsupported
+wrench: seeds 0, 1, 2, 3
+  ref_wrench.npz            +73.1 (0.733; s/b/k +16/+25/+11)    +70.7 (0.715; s/b/k +17/+22/+11)    +62.8 (0.796; s/b/k +11/+20/+10)    +80.1 (0.676; s/b/k +20/+26/+13)

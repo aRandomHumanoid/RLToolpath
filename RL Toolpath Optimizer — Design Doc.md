@@ -1,6 +1,6 @@
 # RL Toolpath Optimizer — Design Doc
 
-Nov 11, 2026; rewritten Nov 16, 2026 for the surface-infill fork · @Albert Lin
+Nov 11, 2026; rewritten Nov 16, 2026 for the surface-infill fork; updated Nov 17 after improvement cycles c01–c20 · @Albert Lin
 
 ## Overview and goals
 
@@ -229,15 +229,20 @@ per solve, shared across load cases (Stage 2).
 ### Search
 
 - **Start families** (`rltp/surfaces/ribbons.py`): parallel lines at an angle and spacing
-  (`line_family`; 1.0 mm is 40% infill), offset rings beside every outline (`offset_rings`),
-  and a crossing grid (`--cross`).
+  (`line_family`; 1.0 mm is 40% infill), two such families alternating by layer
+  (`--alt-angle`), lines spaced by a density field (`density_family`: per cross-section
+  normalised, smoothed along the lines, calibrated to the infill target), offset rings beside
+  every outline (`offset_rings`), and a crossing grid (`--cross`).
 - **Deformation:** a smooth warp field over the part, a grid of 2D displacements every 5 mm
   interpolated by cubic splines, each component bounded by tanh to ±1.5 mm (`Warp`). All free
   ribbons bend together; spacing can tighten or open locally, so material can gather.
-- **Optimizer:** CMA-ES (`rltp/surfaces/cmaes.py`) over the warp parameters, forked workers
-  scoring candidates in parallel (`scripts/ribbons.py`). Gradient-free because the score is
-  piecewise constant below the 0.1 mm grid. One evaluation (lay and re-score) is about 1.2 s on
-  the frame for vertical ribbons, about 3 s for 3D ones (every layer laid and scored on its own).
+- **Optimizer:** CMA-ES (`rltp/surfaces/cmaes.py`) over the warp parameters (and one parameter
+  per skin layer with `--skin-search`), then local block moves (`LocalSearch`: 1–3 warp nodes
+  or skins per candidate, elitist, step size by success rate), forked workers scoring
+  candidates in parallel (`scripts/ribbons.py`). Gradient-free because the score is piecewise
+  constant below the 0.1 mm grid. One evaluation (lay and re-score) is about 0.9 s on the frame
+  for vertical ribbons (layers sharing a template share their derived data and laminate
+  columns), about 3 s for 3D ones (every layer laid and scored on its own).
 - **3D, warm-started.** A 3D warp has N times the parameters, so a 3D search starts from a
   finished vertical one (`--warm`): its warp becomes the middle level and every height step
   starts at 0, so the search begins exactly at the vertical result and adds height variation
@@ -246,6 +251,62 @@ per solve, shared across load cases (Stage 2).
   loop), starts traced along the gradient start's direction field, a band primitive (one
   surface plus a bead count, printed as a zigzag band), and gradients through a differentiable
   rasterization into the field model's adjoint.
+
+### What the improvement cycles decided (c01–c20, Nov 16–17, 2026)
+
+Twenty cycles, each one change with an adversarial review and a control
+(`docs/experiments.md` has every table). What stayed:
+
+- **Skins are part of the search** (c02). The solid layers held most of Σ FI⁸ and kept the
+  slicer's directions; one parameter per skin layer (0° or 90°) searched with the warp gains
+  11–28 points, almost all bonding: a skin printed in the same order as the infill beside it
+  shortens the time between a cell and the one above it.
+- **Two families alternating by layer** (c03) where loads run both ways (frame, plate: a
+  cross-ply, 10–15% stronger); one family along the wrench's handle. Three rotating families
+  (c14) start stronger but lose it to strokes and print time after search.
+- **CMA-ES to explore, local block moves to refine** (c07). Around a good warp every
+  whole-vector step flips cut and merge decisions all over the part, so the best is a narrow
+  spike; moving one warp node (or one skin) at a time adds 7–17 points. CMA-ES 1,500, then local
+  750. Smaller CMA-ES steps (c06), an elitist ES (c01), a larger warp (c12) and other budget
+  splits (c13) don't beat it.
+- **Density families, normalised, smoothed, and fitted to the load distribution** (c05, c15,
+  c17, c18). Lines spaced by a density field, with three fixes learned in order: each
+  cross-section of a family keeps the uniform line count, so a dense spot doesn't shift every
+  line beyond it (c15); the field is smoothed 3 mm along the lines, so they don't lean and
+  zigzag to follow it (c17); and the field is fitted to 50 + 50 random cases instead of the
+  search's 10 + 10 (c18). Used where it wins on unseen loads: the plate (the gradient field
+  step's density) and the wrench (stress^0.5, one family); the frame stays uniform.
+- **Every kept change is checked on held-out load seeds** (c10, c15). The reference loses up to
+  43 points on unseen cases; a density fitted to the search's own cases looked about 3%
+  stronger on them and was up to 14% weaker on unseen ones. Run-to-run noise of a whole search
+  is about 5 points per part (c13), so smaller differences need replicates.
+
+What didn't, and why: per-family warps and a searched line spacing (c04: more parameters, a
+more rugged score); screened start angles (c08: a start's rank doesn't survive search); 3D
+warps after refinement (c09: −1 to +2.5 points at three times the cost); searching over 40 cases
+(c11: slower, flatter, worse on unseen cases); longer connectors and re-routed merges (c16: a
+merge reorders printing, so travel and bonds move against the stroke count).
+
+### Results after the cycles (Nov 17, 2026)
+
+Points against each part's slicer layout (FI_agg, strokes); "unseen" is the mean over load
+seeds 1–3, which no search saw (`scripts/ribbon_heldout.py`):
+
+| part | edit-by-edit reference | reference, unseen | ribbons, final | ribbons, unseen |
+| --- | --- | --- | --- | --- |
+| frame | +61.0: 0.633, 940 strokes | +46.4: 0.696 | +112.3: 0.805, 322 (uniform cross-ply) | +118.2: 0.789 |
+| plate | +19.5: 0.491, 1629 | −18.3: 0.654 | +139.6: 0.617, 319 (100-case field density) | +123.6: 0.701 |
+| wrench | +73.1: 0.733, 727 | +71.2: 0.729 | +124.9 / +128.3: 0.858, 217 (two seeds) | +125.5 / +127.3: 0.854 |
+
+- **Continuity and print time carry the lead**: a third to a fifth of the strokes, 15–23%
+  shorter prints, every end merged or anchored.
+- **The reference is still 7–15% stronger on unseen loads** (FI_agg). Per-cell directions and
+  densities are a richer lever than line spacing and a smooth warp; density families narrowed
+  the gap on the plate (4% stronger than uniform ribbons on unseen loads) but placing material
+  by a field fitted to the search's own cases didn't survive unseen ones.
+- **Gains must be checked on unseen loads and across search seeds.** A whole search varies by
+  about 5 points; the density variants that looked strongest on the search's cases were the
+  weakest on unseen ones until the field was smoothed and fitted to 100 cases.
 
 ### Results (c00, Nov 16, 2026)
 
@@ -277,14 +338,17 @@ writes one per run.
 
 ## Next steps
 
-1. Per-ribbon moves and a search that changes the number of ribbons.
-2. Starts from the gradient start's direction and density fields (streamlines, spaced by
-   density).
-3. True crossings (strokes sharing a node) and a stacked-crossing cost.
-4. A band primitive for edge-following ribs.
-5. Stage 2: a 3D evaluator, so leaning and warped surfaces (built, `--z-levels`) are scored on
+1. **Directions as well as density.** Density families took the field step's density; its
+   directions are still only the two family angles plus a warp. Families traced along a
+   direction field fitted to many cases (the density's fix, c18, applied to directions), spaced
+   by the normalised, smoothed density.
+2. **A merge that sees print order.** Merging more ends cost travel and bonds (c16); choosing
+   connectors with the stroke order and the next layer's timing in view.
+3. Per-ribbon moves and a search that changes the number of ribbons.
+4. True crossings (strokes sharing a node) and a stacked-crossing cost.
+5. A band primitive for edge-following ribs.
+6. Stage 2: a 3D evaluator, so leaning and warped surfaces (built, `--z-levels`) are scored on
    what they are for.
-6. Held-out load seeds for every ribbon result.
 
 ## Risks and open questions
 
@@ -296,6 +360,10 @@ writes one per run.
 | Stacked ends | identical layers stack every path end, which bond quality charges | alternate merges by layer |
 | In-plane evaluator | it charges a lean (less overlap, weaker bonds) but can't reward one: out-of-plane loads aren't modelled | Stage 2, 3D evaluator |
 | Placeholder constants | E1/E2 = 1.27 makes angles cheap; real filaments may be more directional | coupons when absolute numbers matter |
+| Fitting to the load sample | the search scores 20 random cases; a layout can specialise to them (the reference loses up to 38 points on unseen ones) | held-out seeds for every kept change; density fields fitted to 100 cases |
+| Run-to-run noise | a whole search varies by about 5 points per part, so single runs mislead | replicate seeds before keeping a change of that size |
+| Deposit accounting | curvy lines lay more material per line in the grid model, so "40% infill" is by the model's count | calibrate every start to the same model count; check extrusion volume in G-code before printing |
+| Placeholder bond timing | skin search gains mostly through the bond-timing term (τ = 30 s placeholder) | report in-plane FI_agg beside the score; calibrate τ |
 
 **Open questions**
 

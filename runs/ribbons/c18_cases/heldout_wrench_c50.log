@@ -1,0 +1,15 @@
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 182x657 at p=0.1 mm, 754403 cells (5.0s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 754403 of 1379575 cells filled, infill 39.0% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 182x657 at p=0.1 mm, 754403 cells (4.7s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 754403 of 1379575 cells filled, infill 39.0% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 182x657 at p=0.1 mm, 754403 cells (3.9s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 754403 of 1379575 cells filled, infill 39.0% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 182x657 at p=0.1 mm, 754403 cells (4.7s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 754403 of 1379575 cells filled, infill 39.0% of the optional cells (target 40%, rule both), 0 unsupported
+points against each seed's slicer layout (FI_agg; strength / bulk / stiffness points)
+wrench: seeds 0, 1, 2, 3
+  wrench_G05_C50           +124.9 (0.858; s/b/k +8/+15/+6)   +126.0 (0.838; s/b/k +9/+15/+5)   +116.3 (0.913; s/b/k +5/+10/+5)   +134.3 (0.810; s/b/k +11/+19/+8)

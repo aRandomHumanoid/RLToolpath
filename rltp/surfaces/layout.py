@@ -46,6 +46,7 @@ from rltp.model import Layer
 from rltp.surfaces.ribbons import Ribbon
 
 LINK_REACH_MM = 4.0      # longest connector, mm (interior steps count INTERIOR_COST)
+LINK_PASSES = 1          # merge passes: later ones route still-open ends around laid connectors
 
 
 def clearance(L: Layer) -> float:
@@ -200,11 +201,13 @@ def _join(L: Layer, a: int, b: int, inner: list[int]) -> bool:
 INTERIOR_COST = 1.5      # a connector step through open infill space, against 1 along the edge band
 
 
-def _merge(L: Layer, pieces: list, band: np.ndarray, region: np.ndarray, thr: float, reach: int) -> int:
+def _merge(L: Layer, pieces: list, band: np.ndarray, region: np.ndarray, thr: float, reach: int,
+           passes: int = 1) -> int:
     """Merge open path ends with connectors (see the module docstring). Connectors run along
     `band` (cost 1 per step) or through open space inside `region` a bead clear of every other
     bead (INTERIOR_COST per step), so ends on different edges (a hole's and the outline's) can
-    merge too; each accepted connector keeps later ones a bead away."""
+    merge too; each accepted connector keeps later ones a bead away. With `passes` > 1, ends
+    left open are routed again around the connectors already laid (until a pass adds none)."""
     W, k = L.W, L.kb
     m = L.flat_mask
     bflat = band.reshape(-1)
@@ -235,30 +238,7 @@ def _merge(L: Layer, pieces: list, band: np.ndarray, region: np.ndarray, thr: fl
     if len(end_piece) < 2:
         return 0
     ends = np.array(sorted(end_piece), np.int64)
-    clear = ndimage.distance_transform_edt(~(L.mask & ~zone.reshape(L.mask.shape))) >= thr
-    interior = (clear & region).reshape(-1) & ~bflat
-    nodes = (bflat | interior) & ~m
-    nodes[ends] = True
-    cells = np.flatnonzero(nodes)
-    nid = np.full(m.size, -1, np.int64)
-    nid[cells] = np.arange(len(cells))
-    cost = np.where(interior[cells], INTERIOR_COST, 1.0)
-    r, c = np.divmod(cells, W)
-    right = cells[(c + 1 < W)]
-    right = right[nodes[right + 1]]
-    down = cells[(cells + W) < m.size]
-    down = down[nodes[down + W]]
-    src = np.r_[nid[right], nid[down]]
-    dst = np.r_[nid[right + 1], nid[down + W]]
-    wgt = 0.5 * (cost[src] + cost[dst])
-    G = coo_matrix((wgt, (src, dst)), shape=(len(cells), len(cells))).tocsr()
-    D, P = dijkstra(G, directed=False, indices=nid[ends], limit=reach, return_predecessors=True)
-    De = D[:, nid[ends]]
-    ia, ib = np.triu_indices(len(ends), 1)
-    d = De[ia, ib]
-    fin = np.isfinite(d)
-    order = np.argsort(d[fin], kind="stable")
-    ia, ib = ia[fin][order], ib[fin][order]
+    endset = set(ends.tolist())
     parent = list(range(len(pieces)))
 
     def find(x):
@@ -267,45 +247,78 @@ def _merge(L: Layer, pieces: list, band: np.ndarray, region: np.ndarray, thr: fl
             x = parent[x]
         return x
 
-    endset = set(ends.tolist())
     used: set = set()
     blocked = np.zeros(m.size, bool)              # within a bead of an accepted connector
     rad = int(np.ceil(thr))
     links = 0
-    for a, b in zip(ia.tolist(), ib.tolist()):
-        ea, eb = int(ends[a]), int(ends[b])
-        if ea in used or eb in used:
-            continue
-        pa, pb = find(end_piece[ea]), find(end_piece[eb])
-        if pa == pb:
-            continue
-        path = []
-        x = int(nid[eb])
-        src_ = int(nid[ea])
-        while x != src_ and x >= 0:
-            path.append(int(cells[x]))
-            x = int(P[a, x])
-        if x < 0:
-            continue
-        inner = path[1:][::-1]                       # strictly between ea and eb, from ea's side
-        if any(y in endset or y in used for y in inner) or (inner and blocked[inner].any()):
-            continue
-        if _join(L, ea, eb, inner):
-            links += 1
-            parent[pa] = pb
-            used.update((ea, eb))
-            used.update(inner)
-            for y in inner:
-                ry, cy = divmod(y, W)
-                r0, r1 = max(ry - rad, 0), min(ry + rad + 1, L.H)
-                c0, c1 = max(cy - rad, 0), min(cy + rad + 1, W)
-                blocked.reshape(L.H, W)[r0:r1, c0:c1] = True
-            blocked[[ea, eb]] = False
+    for _ in range(max(int(passes), 1)):
+        # pass 1 routes every pair at once and skips a pair whose route an earlier connector
+        # took or crowds; later passes route the ends still open around the connectors laid
+        live = np.array([e for e in ends.tolist() if e not in used], np.int64)
+        if len(live) < 2:
+            break
+        clear = ndimage.distance_transform_edt(~(L.mask & ~zone.reshape(L.mask.shape))) >= thr
+        interior = (clear & region).reshape(-1) & ~bflat
+        nodes = (bflat | interior) & ~m & ~blocked
+        nodes[live] = True
+        cells = np.flatnonzero(nodes)
+        nid = np.full(m.size, -1, np.int64)
+        nid[cells] = np.arange(len(cells))
+        cost = np.where(interior[cells], INTERIOR_COST, 1.0)
+        r, c = np.divmod(cells, W)
+        right = cells[(c + 1 < W)]
+        right = right[nodes[right + 1]]
+        down = cells[(cells + W) < m.size]
+        down = down[nodes[down + W]]
+        src = np.r_[nid[right], nid[down]]
+        dst = np.r_[nid[right + 1], nid[down + W]]
+        wgt = 0.5 * (cost[src] + cost[dst])
+        G = coo_matrix((wgt, (src, dst)), shape=(len(cells), len(cells))).tocsr()
+        D, P = dijkstra(G, directed=False, indices=nid[live], limit=reach, return_predecessors=True)
+        De = D[:, nid[live]]
+        ia, ib = np.triu_indices(len(live), 1)
+        d = De[ia, ib]
+        fin = np.isfinite(d)
+        order = np.argsort(d[fin], kind="stable")
+        ia, ib = ia[fin][order], ib[fin][order]
+        added = 0
+        for a, b in zip(ia.tolist(), ib.tolist()):
+            ea, eb = int(live[a]), int(live[b])
+            if ea in used or eb in used:
+                continue
+            pa, pb = find(end_piece[ea]), find(end_piece[eb])
+            if pa == pb:
+                continue
+            path = []
+            x = int(nid[eb])
+            src_ = int(nid[ea])
+            while x != src_ and x >= 0:
+                path.append(int(cells[x]))
+                x = int(P[a, x])
+            if x < 0:
+                continue
+            inner = path[1:][::-1]                       # strictly between ea and eb, from ea's side
+            if any(y in endset or y in used for y in inner) or (inner and blocked[inner].any()):
+                continue
+            if _join(L, ea, eb, inner):
+                links += 1
+                added += 1
+                parent[pa] = pb
+                used.update((ea, eb))
+                used.update(inner)
+                for y in inner:
+                    ry, cy = divmod(y, W)
+                    r0, r1 = max(ry - rad, 0), min(ry + rad + 1, L.H)
+                    c0, c1 = max(cy - rad, 0), min(cy + rad + 1, W)
+                    blocked.reshape(L.H, W)[r0:r1, c0:c1] = True
+                blocked[[ea, eb]] = False
+        if not added:
+            break
     return links
 
 
 def lay(L: Layer, ribbons: list[Ribbon], min_run: int | None = None,
-        link_reach: int | None = None) -> LayStats:
+        link_reach: int | None = None, link_passes: int | None = None) -> LayStats:
     """Replace L's infill with `ribbons` (fixed ones first, then the rest in order); see the
     module docstring. Modifies L in place."""
     k = L.kb
@@ -344,7 +357,8 @@ def lay(L: Layer, ribbons: list[Ribbon], min_run: int | None = None,
     L.invalidate()
     st = LayStats(pieces=len(pieces), loops=sum(1 for _, lp in pieces if lp))
     if band is not None and reach > 0:
-        st.links = _merge(L, pieces, band, avail, thr, reach)
+        st.links = _merge(L, pieces, band, avail, thr, reach,
+                          LINK_PASSES if link_passes is None else link_passes)
     L.invalidate()
     st.anchored = len(anchor_ends(L, free_ends(L)))
     normalize_seams(L)
@@ -370,10 +384,20 @@ def _reverse_free(ribbons: list[Ribbon]) -> list[Ribbon]:
 def _templates(part, ribbons, alternate: bool, **kw):
     """[(template layer, LayStats, layer indices it applies to)]: one per infill geometry (two
     with `alternate`: odd layers of a group lay the free ribbons in reverse order, so crossings
-    are cut the other way). `ribbons` may instead be a function of height (3D surfaces, e.g.
-    Warp3D.apply): every infill layer is then laid on its own, from the ribbons' cut at its
-    mid-height."""
+    are cut the other way). `ribbons` may instead be a pair (even layers' ribbons, odd layers'
+    ribbons: two families alternating by layer, e.g. lines at 0 and 90 degrees), or a function
+    of height (3D surfaces, e.g. Warp3D.apply): every infill layer is then laid on its own, from
+    the ribbons' cut at its mid-height."""
     out = []
+    if isinstance(ribbons, tuple):            # families rotating through each group's layers: layer i
+        nf = len(ribbons)                     # gets family i mod len (a pair alternates)
+        for ks in _groups(part):
+            for parity in range(nf):
+                sel = [k for i, k in enumerate(ks) if i % nf == parity]
+                if sel:
+                    T = part.layers[sel[0]].copy()
+                    out.append((T, lay(T, ribbons[parity], **kw), sel))
+        return out
     if callable(ribbons):
         ks = [k for k, L in enumerate(part.layers) if is_infill_layer(L)]
         for i, k in enumerate(ks):

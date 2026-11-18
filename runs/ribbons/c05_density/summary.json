@@ -1,0 +1,40 @@
+[
+ {
+  "run": "wrench_DENS",
+  "part": "wrench",
+  "which": "start",
+  "objective": 65.88954191317191,
+  "fi_agg": 0.9394544556234572,
+  "time_s": 607.7524350511434,
+  "strokes": 322,
+  "infill_pct": 40.108315315597615,
+  "lean_deg": null,
+  "strength": 3.123,
+  "bulk": 8.83,
+  "stiff": 2.311,
+  "cont": 46.562,
+  "time": 4.259,
+  "inter": 0.046,
+  "cover": -0.174,
+  "infill": 0.933
+ },
+ {
+  "run": "wrench_DENS",
+  "part": "wrench",
+  "which": "best",
+  "objective": 114.64984625297829,
+  "fi_agg": 0.8523518926143543,
+  "time_s": 632.7002855009587,
+  "strokes": 286,
+  "infill_pct": 45.89905889971694,
+  "lean_deg": null,
+  "strength": 7.988,
+  "bulk": 16.355,
+  "stiff": 5.615,
+  "cont": 56.391,
+  "time": 0.329,
+  "inter": 33.162,
+  "cover": -0.333,
+  "infill": -4.858
+ }
+]

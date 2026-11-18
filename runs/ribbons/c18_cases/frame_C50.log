@@ -1,0 +1,45 @@
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 202x442 at p=0.1 mm, 914363 cells (5.6s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 914363 of 1652800 cells filled, infill 39.3% of the optional cells (target 40%, rule both), 0 unsupported
+[ribbons] density fields: target 0.409 lays 39.6% infill
+[ribbons] frame: 53 ribbons, 172 warp parameters; start +60.6 (FI_agg 0.816, 760 s, 413 strokes); reference final +61.0; 10 s
+[ribbons] gen 5 evals 61: best +75.9, this gen +75.1 (mean +60.1), sigma 0.273, 43 s
+[ribbons] gen 10 evals 121: best +83.4, this gen +75.5 (mean +65.4), sigma 0.257, 74 s
+[ribbons] gen 15 evals 181: best +86.3, this gen +86.3 (mean +68.7), sigma 0.248, 105 s
+[ribbons] gen 20 evals 241: best +86.3, this gen +78.8 (mean +72.0), sigma 0.244, 134 s
+[ribbons] gen 25 evals 301: best +86.3, this gen +74.2 (mean +64.1), sigma 0.242, 161 s
+[ribbons] gen 30 evals 361: best +86.3, this gen +75.4 (mean +68.7), sigma 0.241, 190 s
+[ribbons] gen 35 evals 421: best +86.3, this gen +85.4 (mean +68.1), sigma 0.239, 217 s
+[ribbons] gen 40 evals 481: best +88.7, this gen +79.1 (mean +70.7), sigma 0.239, 244 s
+[ribbons] gen 45 evals 541: best +88.7, this gen +79.9 (mean +72.7), sigma 0.238, 266 s
+[ribbons] gen 50 evals 601: best +88.7, this gen +86.9 (mean +74.6), sigma 0.236, 288 s
+[ribbons] gen 55 evals 661: best +88.7, this gen +82.8 (mean +69.5), sigma 0.234, 315 s
+[ribbons] gen 60 evals 721: best +88.7, this gen +86.3 (mean +69.7), sigma 0.233, 349 s
+[ribbons] gen 65 evals 781: best +88.7, this gen +80.5 (mean +69.6), sigma 0.232, 388 s
+[ribbons] gen 70 evals 841: best +91.3, this gen +80.8 (mean +70.8), sigma 0.230, 422 s
+[ribbons] gen 75 evals 901: best +91.3, this gen +70.9 (mean +62.1), sigma 0.229, 450 s
+[ribbons] gen 80 evals 961: best +91.3, this gen +87.8 (mean +74.6), sigma 0.228, 481 s
+[ribbons] gen 85 evals 1021: best +97.2, this gen +87.6 (mean +77.7), sigma 0.225, 515 s
+[ribbons] gen 90 evals 1081: best +97.2, this gen +89.2 (mean +71.4), sigma 0.223, 548 s
+[ribbons] gen 95 evals 1141: best +97.2, this gen +85.8 (mean +72.4), sigma 0.220, 578 s
+[ribbons] gen 100 evals 1201: best +97.2, this gen +83.2 (mean +73.6), sigma 0.217, 605 s
+[ribbons] gen 105 evals 1261: best +97.2, this gen +83.8 (mean +74.7), sigma 0.216, 633 s
+[ribbons] gen 110 evals 1321: best +97.2, this gen +91.1 (mean +76.1), sigma 0.214, 665 s
+[ribbons] gen 115 evals 1381: best +97.2, this gen +89.0 (mean +76.2), sigma 0.212, 697 s
+[ribbons] gen 120 evals 1441: best +97.2, this gen +92.3 (mean +79.2), sigma 0.210, 725 s
+[ribbons] gen 125 evals 1501: best +97.2, this gen +87.5 (mean +77.0), sigma 0.208, 757 s
+[ribbons] local refinement from +97.2
+[ribbons] gen 5 evals 1561: best +106.1, this gen +106.1 (mean +100.9), sigma 0.406, 783 s
+[ribbons] gen 10 evals 1621: best +106.1, this gen +103.0 (mean +98.0), sigma 0.257, 808 s
+[ribbons] gen 15 evals 1681: best +107.1, this gen +107.1 (mean +100.9), sigma 0.176, 835 s
+[ribbons] gen 20 evals 1741: best +107.8, this gen +107.8 (mean +104.6), sigma 0.121, 861 s
+[ribbons] gen 25 evals 1801: best +109.1, this gen +108.7 (mean +103.5), sigma 0.083, 887 s
+[ribbons] gen 30 evals 1861: best +109.2, this gen +109.2 (mean +107.1), sigma 0.062, 913 s
+[ribbons] gen 35 evals 1921: best +109.3, this gen +109.3 (mean +108.3), sigma 0.062, 938 s
+[ribbons] gen 40 evals 1981: best +110.0, this gen +110.0 (mean +106.8), sigma 0.062, 964 s
+[ribbons] gen 45 evals 2041: best +110.2, this gen +110.2 (mean +107.0), sigma 0.062, 989 s
+[ribbons] gen 50 evals 2101: best +111.6, this gen +111.6 (mean +107.0), sigma 0.062, 1015 s
+[ribbons] gen 55 evals 2161: best +112.1, this gen +112.0 (mean +106.5), sigma 0.062, 1042 s
+[ribbons] gen 60 evals 2221: best +112.3, this gen +112.3 (mean +106.5), sigma 0.069, 1068 s
+[ribbons] gen 63 evals 2257: best +112.3, this gen +112.3 (mean +107.7), sigma 0.062, 1084 s
+[ribbons] frame: best +112.3 (FI_agg 0.777, 751 s, 318 strokes, 0 free ends) vs reference final +61.0 (FI_agg 0.633, 890 s, 940 strokes); 1087 s

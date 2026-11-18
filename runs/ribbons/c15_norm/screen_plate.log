@@ -1,0 +1,15 @@
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 282x402 at p=0.1 mm, 1352320 cells (6.7s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 1352320 of 2558800 cells filled, infill 39.7% of the optional cells (target 40%, rule both), 0 unsupported
+plate angle 90 alt 0.0: built in 7 s
+uniform                 +110.9  FI 0.744  solid 0.896 interior 0.690   349 strokes  39.5%  s/b/k +14.8/+16.7/+5.4 cont +58.9  pieces 116 links 101 anch 27
+stress g0.5 none         +85.6  FI 0.646  solid 0.746 interior 0.650   474 strokes  39.8%  s/b/k +21.9/+20.4/+8.6 cont +42.9  pieces 167 links 140 anch 29
+stress g0.5 station     +109.8  FI 0.670  solid 0.783 interior 0.655   423 strokes  39.7%  s/b/k +20.0/+20.6/+7.4 cont +53.1  pieces 126 links 104 anch 31
+stress g0.5 segment      +83.3  FI 0.708  solid 0.843 interior 0.653   501 strokes  40.5%  s/b/k +17.3/+18.7/+7.1 cont +41.0  pieces 181 links 152 anch 38
+stress g1 none           +78.1  FI 0.663  solid 0.782 interior 0.668   578 strokes  40.0%  s/b/k +20.6/+21.3/+9.2 cont +37.4  pieces 240 links 203 anch 32
+stress g1 station       +113.9  FI 0.625  solid 0.724 interior 0.628   413 strokes  40.4%  s/b/k +23.5/+24.6/+10.1 cont +50.7  pieces 148 links 127 anch 21
+stress g1 segment        +54.3  FI 0.737  solid 0.896 interior 0.670   618 strokes  40.1%  s/b/k +15.2/+19.6/+8.2 cont +29.1  pieces 262 links 222 anch 39
+fields none              +16.2  FI 0.820  solid 1.005 interior 0.778   779 strokes  40.2%  s/b/k +9.9/+18.2/+7.3 cont +13.8  pieces 364 links 308 anch 24
+fields station           +97.6  FI 0.580  solid 0.672 interior 0.586   468 strokes  40.1%  s/b/k +27.2/+27.1/+11.2 cont +40.2  pieces 163 links 137 anch 20
+fields segment           +56.7  FI 0.706  solid 0.834 interior 0.664   673 strokes  40.3%  s/b/k +17.4/+21.0/+8.1 cont +24.4  pieces 271 links 226 anch 29
+done in 237 s

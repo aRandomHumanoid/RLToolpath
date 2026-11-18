@@ -1,0 +1,11 @@
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 282x402 at p=0.1 mm, 1352320 cells (9.4s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 1352320 of 2558800 cells filled, infill 39.7% of the optional cells (target 40%, rule both), 0 unsupported
+plate angle 90 alt 0.0: built in 10 s
+reach 4 fields:station:1:0.8:1.5  +112.0  FI 0.589  solid 0.649   423 strokes   1061 s  40.3%  s/b/k +26.5/+27.8/+11.5 cont +46.7 time +2.0 cover -0.3 infill -0.0  pieces 123 links 101 anch 23
+reach 4 fields:station:1:0.8:2  +105.4  FI 0.590  solid 0.663   477 strokes   1060 s  40.2%  s/b/k +26.4/+26.9/+11.0 cont +43.2 time +2.1 cover -0.3 infill +0.1  pieces 128 links 101 anch 30
+reach 4 fields:station:1:0.8:4  +116.1  FI 0.619  solid 0.703   394 strokes   1054 s  40.1%  s/b/k +24.0/+25.4/+9.9 cont +47.3 time +2.7 cover -0.4 infill +0.2  pieces 125 links 106 anch 23
+reach 4 fields:station:1:0.6:3  +112.1  FI 0.617  solid 0.697   404 strokes   1048 s  40.0%  s/b/k +24.1/+24.7/+9.5 cont +48.1 time +3.2 cover -0.4 infill +0.3  pieces 117 links 97 anch 28
+reach 4 fields:station:0.7:0.8:3  +111.9  FI 0.610  solid 0.689   458 strokes   1050 s  40.2%  s/b/k +24.7/+25.6/+9.9 cont +45.0 time +3.1 cover -0.2 infill +0.2  pieces 126 links 101 anch 30
+reach 4 g1:station:1:0.8:3       +83.1  FI 0.677  solid 0.803   488 strokes   1062 s  40.0%  s/b/k +19.5/+22.6/+8.7 cont +35.4 time +1.9 cover -0.3 infill +0.3  pieces 129 links 101 anch 37
+done in 70 s

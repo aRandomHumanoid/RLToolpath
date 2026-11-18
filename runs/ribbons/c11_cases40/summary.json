@@ -1,0 +1,40 @@
+[
+ {
+  "run": "plate_C40",
+  "part": "plate",
+  "which": "start",
+  "objective": 103.34170401517541,
+  "fi_agg": 0.7677171281288763,
+  "time_s": 1026.745391719934,
+  "strokes": 349,
+  "infill_pct": 39.51715608238838,
+  "lean_deg": null,
+  "strength": 13.217,
+  "bulk": 11.259,
+  "stiff": 4.895,
+  "cont": 58.854,
+  "time": 5.203,
+  "inter": 10.03,
+  "cover": 0.042,
+  "infill": -0.158
+ },
+ {
+  "run": "plate_C40",
+  "part": "plate",
+  "which": "best",
+  "objective": 108.3000836149276,
+  "fi_agg": 0.7501121885618837,
+  "time_s": 1027.8450658709667,
+  "strokes": 357,
+  "infill_pct": 40.1355587666234,
+  "lean_deg": null,
+  "strength": 14.377,
+  "bulk": 13.177,
+  "stiff": 4.965,
+  "cont": 59.479,
+  "time": 5.102,
+  "inter": 11.075,
+  "cover": -0.064,
+  "infill": 0.189
+ }
+]

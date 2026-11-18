@@ -1,0 +1,19 @@
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 182x657 at p=0.1 mm, 754403 cells (4.8s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 754403 of 1379575 cells filled, infill 39.0% of the optional cells (target 40%, rule both), 0 unsupported
+[ribbons] density gamma 0.5: target 0.384 lays 40.1% infill
+[ribbons] wrench: 64 ribbons, 242 warp parameters; start +65.9 (FI_agg 0.939, 608 s, 322 strokes); reference final +73.1; 13 s
+[ribbons] gen 5 evals 61: best +93.0, this gen +88.7 (mean +60.0), sigma 0.279, 38 s
+[ribbons] gen 10 evals 121: best +99.1, this gen +99.1 (mean +78.7), sigma 0.266, 63 s
+[ribbons] gen 15 evals 181: best +101.1, this gen +92.6 (mean +79.5), sigma 0.256, 86 s
+[ribbons] gen 20 evals 241: best +101.1, this gen +94.8 (mean +81.7), sigma 0.246, 108 s
+[ribbons] gen 25 evals 301: best +101.1, this gen +99.4 (mean +74.5), sigma 0.238, 132 s
+[ribbons] gen 30 evals 361: best +104.0, this gen +94.2 (mean +81.4), sigma 0.231, 156 s
+[ribbons] gen 35 evals 421: best +104.0, this gen +88.9 (mean +78.5), sigma 0.226, 182 s
+[ribbons] gen 40 evals 481: best +104.0, this gen +90.0 (mean +79.9), sigma 0.222, 210 s
+[ribbons] gen 45 evals 541: best +108.3, this gen +101.5 (mean +84.2), sigma 0.218, 236 s
+[ribbons] gen 50 evals 601: best +108.3, this gen +102.6 (mean +85.6), sigma 0.215, 261 s
+[ribbons] gen 55 evals 661: best +108.3, this gen +107.1 (mean +89.8), sigma 0.213, 284 s
+[ribbons] gen 60 evals 721: best +108.7, this gen +102.8 (mean +88.0), sigma 0.211, 304 s
+[ribbons] gen 63 evals 757: best +111.6, this gen +111.6 (mean +92.2), sigma 0.210, 315 s
+[ribbons] wrench: best +111.6 (FI_agg 0.872, 633 s, 256 strokes, 0 free ends) vs reference final +73.1 (FI_agg 0.733, 724 s, 727 strokes); 318 s

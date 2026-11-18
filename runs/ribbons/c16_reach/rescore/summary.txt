@@ -1,0 +1,13 @@
+frame reach 4: [ribbons] frame: best +110.2 (FI_agg 0.796, 736 s, 345 strokes, 0 free ends) vs reference final +61.0 (FI_agg 
+frame reach 6: [ribbons] frame: best +110.7 (FI_agg 0.795, 735 s, 334 strokes, 0 free ends) vs reference final +61.0 (FI_agg 
+frame reach 8: [ribbons] frame: best +111.7 (FI_agg 0.795, 735 s, 324 strokes, 0 free ends) vs reference final +61.0 (FI_agg 
+frame reach 12: [ribbons] frame: best +111.7 (FI_agg 0.794, 736 s, 314 strokes, 0 free ends) vs reference final +61.0 (FI_agg 
+plate reach 4: [ribbons] plate: best +135.5 (FI_agg 0.628, 1068 s, 330 strokes, 0 free ends) vs reference final +19.5 (FI_agg
+plate reach 6: [ribbons] plate: best +127.2 (FI_agg 0.629, 1071 s, 320 strokes, 0 free ends) vs reference final +19.5 (FI_agg
+plate reach 8: [ribbons] plate: best +127.2 (FI_agg 0.629, 1071 s, 320 strokes, 0 free ends) vs reference final +19.5 (FI_agg
+plate reach 12: [ribbons] plate: best +130.9 (FI_agg 0.628, 1074 s, 309 strokes, 0 free ends) vs reference final +19.5 (FI_agg
+wrench reach 4: [ribbons] wrench: best +122.0 (FI_agg 0.833, 632 s, 265 strokes, 0 free ends) vs reference final +73.1 (FI_agg
+wrench reach 6: [ribbons] wrench: best +94.8 (FI_agg 0.852, 647 s, 349 strokes, 0 free ends) vs reference final +73.1 (FI_agg 
+wrench reach 8: [ribbons] wrench: best +94.8 (FI_agg 0.852, 647 s, 349 strokes, 0 free ends) vs reference final +73.1 (FI_agg 
+wrench reach 12: [ribbons] wrench: best +94.5 (FI_agg 0.869, 632 s, 328 strokes, 0 free ends) vs reference final +73.1 (FI_agg 
+DONE

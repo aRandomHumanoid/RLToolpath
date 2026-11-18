@@ -1,0 +1,45 @@
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 202x442 at p=0.1 mm, 914363 cells (4.7s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 914363 of 1652800 cells filled, infill 39.3% of the optional cells (target 40%, rule both), 0 unsupported
+[ribbons] density fields: target 0.339 lays 40.3% infill
+[ribbons] frame: 44 ribbons, 172 warp parameters; start +74.0 (FI_agg 0.761, 783 s, 428 strokes); reference final +61.0; 10 s
+[ribbons] gen 5 evals 61: best +74.0, this gen +69.8 (mean +55.8), sigma 0.274, 45 s
+[ribbons] gen 10 evals 121: best +88.8, this gen +88.8 (mean +59.1), sigma 0.261, 81 s
+[ribbons] gen 15 evals 181: best +88.8, this gen +79.4 (mean +64.7), sigma 0.255, 117 s
+[ribbons] gen 20 evals 241: best +88.8, this gen +68.2 (mean +57.5), sigma 0.249, 154 s
+[ribbons] gen 25 evals 301: best +88.8, this gen +78.5 (mean +64.6), sigma 0.246, 193 s
+[ribbons] gen 30 evals 361: best +88.8, this gen +75.4 (mean +66.5), sigma 0.244, 224 s
+[ribbons] gen 35 evals 421: best +88.8, this gen +73.1 (mean +64.2), sigma 0.244, 253 s
+[ribbons] gen 40 evals 481: best +88.8, this gen +68.1 (mean +64.0), sigma 0.244, 286 s
+[ribbons] gen 45 evals 541: best +88.8, this gen +74.6 (mean +64.8), sigma 0.246, 320 s
+[ribbons] gen 50 evals 601: best +88.8, this gen +79.3 (mean +66.2), sigma 0.246, 352 s
+[ribbons] gen 55 evals 661: best +88.8, this gen +69.0 (mean +60.6), sigma 0.243, 383 s
+[ribbons] gen 60 evals 721: best +88.8, this gen +74.8 (mean +61.8), sigma 0.240, 419 s
+[ribbons] gen 65 evals 781: best +88.8, this gen +73.4 (mean +63.5), sigma 0.239, 456 s
+[ribbons] gen 70 evals 841: best +88.8, this gen +77.4 (mean +66.3), sigma 0.237, 492 s
+[ribbons] gen 75 evals 901: best +88.8, this gen +79.8 (mean +62.7), sigma 0.238, 528 s
+[ribbons] gen 80 evals 961: best +88.8, this gen +78.2 (mean +65.1), sigma 0.239, 559 s
+[ribbons] gen 85 evals 1021: best +88.8, this gen +74.0 (mean +64.8), sigma 0.237, 588 s
+[ribbons] gen 90 evals 1081: best +88.8, this gen +76.0 (mean +65.5), sigma 0.237, 615 s
+[ribbons] gen 95 evals 1141: best +88.8, this gen +82.1 (mean +67.3), sigma 0.237, 646 s
+[ribbons] gen 100 evals 1201: best +88.8, this gen +83.3 (mean +73.9), sigma 0.237, 680 s
+[ribbons] gen 105 evals 1261: best +88.8, this gen +78.8 (mean +70.9), sigma 0.237, 715 s
+[ribbons] gen 110 evals 1321: best +90.7, this gen +90.7 (mean +74.9), sigma 0.236, 742 s
+[ribbons] gen 115 evals 1381: best +90.7, this gen +80.1 (mean +67.0), sigma 0.235, 771 s
+[ribbons] gen 120 evals 1441: best +90.7, this gen +87.4 (mean +76.0), sigma 0.233, 798 s
+[ribbons] gen 125 evals 1501: best +90.7, this gen +82.5 (mean +67.8), sigma 0.231, 823 s
+[ribbons] local refinement from +90.7
+[ribbons] gen 5 evals 1561: best +91.7, this gen +91.7 (mean +86.8), sigma 0.389, 852 s
+[ribbons] gen 10 evals 1621: best +93.5, this gen +92.8 (mean +89.4), sigma 0.257, 880 s
+[ribbons] gen 15 evals 1681: best +93.5, this gen +93.5 (mean +87.7), sigma 0.169, 908 s
+[ribbons] gen 20 evals 1741: best +93.7, this gen +93.6 (mean +90.6), sigma 0.149, 935 s
+[ribbons] gen 25 evals 1801: best +96.6, this gen +96.6 (mean +91.0), sigma 0.121, 960 s
+[ribbons] gen 30 evals 1861: best +96.9, this gen +96.9 (mean +95.1), sigma 0.094, 987 s
+[ribbons] gen 35 evals 1921: best +97.7, this gen +97.7 (mean +97.0), sigma 0.080, 1011 s
+[ribbons] gen 40 evals 1981: best +98.8, this gen +98.8 (mean +95.6), sigma 0.062, 1036 s
+[ribbons] gen 45 evals 2041: best +99.2, this gen +99.1 (mean +96.9), sigma 0.062, 1060 s
+[ribbons] gen 50 evals 2101: best +99.2, this gen +99.2 (mean +96.2), sigma 0.062, 1085 s
+[ribbons] gen 55 evals 2161: best +99.3, this gen +98.2 (mean +94.1), sigma 0.062, 1109 s
+[ribbons] gen 60 evals 2221: best +99.5, this gen +99.5 (mean +94.8), sigma 0.062, 1135 s
+[ribbons] gen 63 evals 2257: best +99.5, this gen +99.5 (mean +97.6), sigma 0.062, 1149 s
+[ribbons] frame: best +99.5 (FI_agg 0.775, 749 s, 363 strokes, 0 free ends) vs reference final +61.0 (FI_agg 0.633, 890 s, 940 strokes); 1156 s

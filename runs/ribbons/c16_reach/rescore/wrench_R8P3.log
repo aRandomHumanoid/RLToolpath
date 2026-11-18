@@ -1,0 +1,6 @@
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 182x657 at p=0.1 mm, 754403 cells (6.4s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 754403 of 1379575 cells filled, infill 39.0% of the optional cells (target 40%, rule both), 0 unsupported
+[ribbons] density gamma 0.5: target 0.382 lays 40.3% infill
+[ribbons] wrench: 63 ribbons, 242 warp parameters; start +110.8 (FI_agg 0.862, 634 s, 286 strokes); reference final +73.1; 20 s
+[ribbons] wrench: best +110.8 (FI_agg 0.862, 634 s, 286 strokes, 0 free ends) vs reference final +73.1 (FI_agg 0.733, 724 s, 727 strokes); 24 s

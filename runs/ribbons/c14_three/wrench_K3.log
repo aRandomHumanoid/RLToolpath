@@ -1,0 +1,44 @@
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 182x657 at p=0.1 mm, 754403 cells (5.9s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 754403 of 1379575 cells filled, infill 39.0% of the optional cells (target 40%, rule both), 0 unsupported
+[ribbons] wrench: 70 ribbons, 242 warp parameters; start +59.0 (FI_agg 0.887, 639 s, 322 strokes); reference final +73.1; 9 s
+[ribbons] gen 5 evals 61: best +85.7, this gen +83.5 (mean +71.3), sigma 0.279, 36 s
+[ribbons] gen 10 evals 121: best +86.5, this gen +82.1 (mean +66.7), sigma 0.266, 74 s
+[ribbons] gen 15 evals 181: best +86.5, this gen +84.0 (mean +77.5), sigma 0.257, 108 s
+[ribbons] gen 20 evals 241: best +87.0, this gen +81.5 (mean +73.3), sigma 0.250, 143 s
+[ribbons] gen 25 evals 301: best +87.1, this gen +80.2 (mean +73.7), sigma 0.245, 177 s
+[ribbons] gen 30 evals 361: best +87.1, this gen +80.7 (mean +74.1), sigma 0.242, 209 s
+[ribbons] gen 35 evals 421: best +88.0, this gen +81.8 (mean +74.0), sigma 0.240, 241 s
+[ribbons] gen 40 evals 481: best +89.4, this gen +88.8 (mean +77.4), sigma 0.239, 268 s
+[ribbons] gen 45 evals 541: best +90.6, this gen +82.4 (mean +77.6), sigma 0.238, 294 s
+[ribbons] gen 50 evals 601: best +91.3, this gen +91.3 (mean +82.2), sigma 0.236, 321 s
+[ribbons] gen 55 evals 661: best +92.5, this gen +92.5 (mean +81.2), sigma 0.234, 344 s
+[ribbons] gen 60 evals 721: best +92.5, this gen +89.7 (mean +78.5), sigma 0.232, 371 s
+[ribbons] gen 65 evals 781: best +92.5, this gen +88.1 (mean +82.9), sigma 0.230, 400 s
+[ribbons] gen 70 evals 841: best +95.3, this gen +94.3 (mean +82.2), sigma 0.228, 431 s
+[ribbons] gen 75 evals 901: best +95.3, this gen +90.1 (mean +81.0), sigma 0.227, 460 s
+[ribbons] gen 80 evals 961: best +95.3, this gen +85.2 (mean +77.2), sigma 0.226, 490 s
+[ribbons] gen 85 evals 1021: best +95.3, this gen +89.2 (mean +81.9), sigma 0.226, 518 s
+[ribbons] gen 90 evals 1081: best +95.3, this gen +89.2 (mean +82.4), sigma 0.227, 548 s
+[ribbons] gen 95 evals 1141: best +95.3, this gen +91.9 (mean +79.2), sigma 0.228, 577 s
+[ribbons] gen 100 evals 1201: best +95.3, this gen +88.7 (mean +77.8), sigma 0.229, 606 s
+[ribbons] gen 105 evals 1261: best +95.3, this gen +91.5 (mean +79.6), sigma 0.230, 635 s
+[ribbons] gen 110 evals 1321: best +95.8, this gen +94.3 (mean +85.5), sigma 0.230, 664 s
+[ribbons] gen 115 evals 1381: best +98.7, this gen +89.8 (mean +83.0), sigma 0.231, 693 s
+[ribbons] gen 120 evals 1441: best +98.7, this gen +94.9 (mean +85.9), sigma 0.230, 722 s
+[ribbons] gen 125 evals 1501: best +100.2, this gen +100.2 (mean +86.6), sigma 0.229, 751 s
+[ribbons] local refinement from +100.2
+[ribbons] gen 5 evals 1561: best +103.7, this gen +103.7 (mean +100.1), sigma 0.543, 780 s
+[ribbons] gen 10 evals 1621: best +107.0, this gen +106.9 (mean +102.2), sigma 0.423, 807 s
+[ribbons] gen 15 evals 1681: best +108.0, this gen +108.0 (mean +103.0), sigma 0.374, 832 s
+[ribbons] gen 20 evals 1741: best +108.8, this gen +108.8 (mean +104.9), sigma 0.330, 856 s
+[ribbons] gen 25 evals 1801: best +108.9, this gen +108.9 (mean +105.1), sigma 0.227, 884 s
+[ribbons] gen 30 evals 1861: best +109.0, this gen +109.0 (mean +108.6), sigma 0.169, 912 s
+[ribbons] gen 35 evals 1921: best +109.4, this gen +109.4 (mean +106.0), sigma 0.162, 938 s
+[ribbons] gen 40 evals 1981: best +109.6, this gen +109.6 (mean +106.9), sigma 0.126, 964 s
+[ribbons] gen 45 evals 2041: best +109.7, this gen +109.7 (mean +106.9), sigma 0.091, 990 s
+[ribbons] gen 50 evals 2101: best +109.8, this gen +109.8 (mean +108.8), sigma 0.071, 1015 s
+[ribbons] gen 55 evals 2161: best +109.8, this gen +109.8 (mean +107.2), sigma 0.062, 1041 s
+[ribbons] gen 60 evals 2221: best +110.6, this gen +110.6 (mean +109.7), sigma 0.062, 1066 s
+[ribbons] gen 63 evals 2257: best +110.6, this gen +110.6 (mean +109.8), sigma 0.062, 1083 s
+[ribbons] wrench: best +110.6 (FI_agg 0.859, 614 s, 248 strokes, 0 free ends) vs reference final +73.1 (FI_agg 0.733, 724 s, 727 strokes); 1087 s

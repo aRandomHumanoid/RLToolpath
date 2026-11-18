@@ -1,0 +1,17 @@
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 282x402 at p=0.1 mm, 1352320 cells (11.8s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 1352320 of 2558800 cells filled, infill 39.7% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 282x402 at p=0.1 mm, 1352320 cells (11.3s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 1352320 of 2558800 cells filled, infill 39.7% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 282x402 at p=0.1 mm, 1352320 cells (9.5s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 1352320 of 2558800 cells filled, infill 39.7% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 282x402 at p=0.1 mm, 1352320 cells (9.3s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 1352320 of 2558800 cells filled, infill 39.7% of the optional cells (target 40%, rule both), 0 unsupported
+points against each seed's slicer layout (FI_agg; strength / bulk / stiffness points)
+plate: seeds 0, 1, 2, 3
+  plate_U                  +110.9 (0.744; s/b/k +15/+17/+5)    +98.4 (0.808; s/b/k +11/+9/+5)   +103.2 (0.773; s/b/k +13/+11/+5)   +108.2 (0.745; s/b/k +15/+13/+6)
+  plate_FSS3               +124.8 (0.601; s/b/k +25/+26/+10)   +101.7 (0.731; s/b/k +16/+15/+8)   +101.9 (0.735; s/b/k +15/+15/+8)   +110.7 (0.659; s/b/k +21/+17/+9)
+  plate_FSS3_C50           +112.3 (0.617; s/b/k +24/+24/+10)    +98.3 (0.685; s/b/k +19/+16/+9)    +97.4 (0.694; s/b/k +18/+16/+8)   +103.7 (0.655; s/b/k +21/+19/+9)

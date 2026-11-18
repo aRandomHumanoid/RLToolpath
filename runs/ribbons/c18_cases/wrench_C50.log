@@ -1,0 +1,48 @@
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 182x657 at p=0.1 mm, 754403 cells (4.0s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 754403 of 1379575 cells filled, infill 39.0% of the optional cells (target 40%, rule both), 0 unsupported
+[rltp] interlayer term on: bonded area under a generic pull and bending (no point_loads)
+[rltp] sliced 25 layers, grid 182x657 at p=0.1 mm, 754403 cells (7.2s)
+[rltp] sparse: 1 walls, 2 solid layers, bridges <= 4.0 mm; 754403 of 1379575 cells filled, infill 39.0% of the optional cells (target 40%, rule both), 0 unsupported
+[ribbons] density gamma 0.5: target 0.377 lays 40.8% infill
+[ribbons] wrench: 63 ribbons, 242 warp parameters; start +36.7 (FI_agg 0.995, 600 s, 364 strokes); reference final +73.1; 26 s
+[ribbons] gen 5 evals 61: best +94.1, this gen +86.3 (mean +72.9), sigma 0.279, 48 s
+[ribbons] gen 10 evals 121: best +94.5, this gen +93.7 (mean +63.2), sigma 0.266, 69 s
+[ribbons] gen 15 evals 181: best +94.6, this gen +94.6 (mean +69.1), sigma 0.255, 95 s
+[ribbons] gen 20 evals 241: best +96.8, this gen +81.8 (mean +70.9), sigma 0.247, 113 s
+[ribbons] gen 25 evals 301: best +96.8, this gen +95.3 (mean +76.8), sigma 0.242, 130 s
+[ribbons] gen 30 evals 361: best +96.8, this gen +79.0 (mean +66.2), sigma 0.238, 151 s
+[ribbons] gen 35 evals 421: best +99.7, this gen +89.2 (mean +77.0), sigma 0.234, 172 s
+[ribbons] gen 40 evals 481: best +100.4, this gen +96.2 (mean +79.5), sigma 0.231, 190 s
+[ribbons] gen 45 evals 541: best +106.9, this gen +94.6 (mean +83.5), sigma 0.228, 209 s
+[ribbons] gen 50 evals 601: best +106.9, this gen +88.9 (mean +82.3), sigma 0.226, 225 s
+[ribbons] gen 55 evals 661: best +106.9, this gen +97.6 (mean +86.5), sigma 0.222, 242 s
+[ribbons] gen 60 evals 721: best +106.9, this gen +95.8 (mean +84.4), sigma 0.219, 258 s
+[ribbons] gen 65 evals 781: best +106.9, this gen +102.2 (mean +85.8), sigma 0.217, 275 s
+[ribbons] gen 70 evals 841: best +106.9, this gen +96.8 (mean +89.7), sigma 0.215, 290 s
+[ribbons] gen 75 evals 901: best +106.9, this gen +100.8 (mean +87.0), sigma 0.214, 313 s
+[ribbons] gen 80 evals 961: best +108.2, this gen +102.7 (mean +86.9), sigma 0.213, 335 s
+[ribbons] gen 85 evals 1021: best +109.4, this gen +109.4 (mean +86.2), sigma 0.212, 361 s
+[ribbons] gen 90 evals 1081: best +109.4, this gen +105.6 (mean +86.7), sigma 0.211, 381 s
+[ribbons] gen 95 evals 1141: best +111.0, this gen +100.7 (mean +87.5), sigma 0.210, 401 s
+[ribbons] gen 100 evals 1201: best +111.0, this gen +92.3 (mean +84.8), sigma 0.209, 423 s
+[ribbons] gen 105 evals 1261: best +111.0, this gen +106.5 (mean +89.9), sigma 0.208, 445 s
+[ribbons] gen 110 evals 1321: best +111.0, this gen +93.6 (mean +85.5), sigma 0.207, 466 s
+[ribbons] gen 115 evals 1381: best +111.0, this gen +96.1 (mean +85.2), sigma 0.206, 489 s
+[ribbons] gen 120 evals 1441: best +111.0, this gen +104.5 (mean +85.5), sigma 0.206, 512 s
+[ribbons] gen 125 evals 1501: best +111.0, this gen +100.2 (mean +85.8), sigma 0.206, 532 s
+[ribbons] local refinement from +111.0
+[ribbons] gen 5 evals 1561: best +113.4, this gen +113.4 (mean +109.8), sigma 0.567, 550 s
+[ribbons] gen 10 evals 1621: best +113.9, this gen +113.8 (mean +109.4), sigma 0.406, 567 s
+[ribbons] gen 15 evals 1681: best +114.5, this gen +114.5 (mean +110.9), sigma 0.374, 584 s
+[ribbons] gen 20 evals 1741: best +119.5, this gen +119.5 (mean +114.8), sigma 0.389, 602 s
+[ribbons] gen 25 evals 1801: best +122.6, this gen +122.6 (mean +118.7), sigma 0.389, 619 s
+[ribbons] gen 30 evals 1861: best +122.6, this gen +122.6 (mean +120.1), sigma 0.291, 636 s
+[ribbons] gen 35 evals 1921: best +123.8, this gen +123.8 (mean +120.3), sigma 0.330, 653 s
+[ribbons] gen 40 evals 1981: best +124.2, this gen +124.2 (mean +120.7), sigma 0.279, 671 s
+[ribbons] gen 45 evals 2041: best +124.4, this gen +124.4 (mean +120.9), sigma 0.217, 687 s
+[ribbons] gen 50 evals 2101: best +124.5, this gen +124.5 (mean +119.7), sigma 0.169, 704 s
+[ribbons] gen 55 evals 2161: best +124.8, this gen +124.8 (mean +119.9), sigma 0.126, 720 s
+[ribbons] gen 60 evals 2221: best +124.9, this gen +124.9 (mean +120.2), sigma 0.103, 738 s
+[ribbons] gen 63 evals 2257: best +124.9, this gen +124.9 (mean +123.2), sigma 0.086, 747 s
+[ribbons] wrench: best +124.9 (FI_agg 0.858, 612 s, 217 strokes, 0 free ends) vs reference final +73.1 (FI_agg 0.733, 724 s, 727 strokes); 750 s

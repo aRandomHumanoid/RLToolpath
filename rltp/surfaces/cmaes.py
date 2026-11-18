@@ -66,6 +66,43 @@ class CMAES:
             self.D = np.sqrt(np.maximum(d2, 1e-20))
 
 
+class LocalSearch:
+    """Sparse moves around the best point so far, for rugged scores where moving every parameter
+    at once flips discrete decisions everywhere: each candidate perturbs 1-3 random `blocks`
+    (index arrays: e.g. one warp node's two components, one skin parameter) by sigma x N(0, 1) and
+    the best candidate replaces the incumbent only if it is better. sigma follows the generation's
+    success rate (target 1/5, time constant ~10 generations), within [sigma0 / 8, sigma0 x 4].
+    ask/tell, minimising; `f0` is the starting point's value."""
+
+    def __init__(self, x0, sigma: float, popsize: int, seed: int, f0: float, blocks: list):
+        self.mean = np.asarray(x0, float).copy()
+        self.n = self.mean.size
+        self.lam = int(popsize)
+        self.f = float(f0)
+        self.sigma = self.sigma0 = float(sigma)
+        self.blocks = [np.asarray(b, np.int64) for b in blocks]
+        self.gen = 0
+        self.rng = np.random.default_rng(seed)
+
+    def ask(self) -> np.ndarray:
+        X = np.repeat(self.mean[None, :], self.lam, axis=0)
+        for i in range(self.lam):
+            for j in self.rng.choice(len(self.blocks), size=int(self.rng.integers(1, 4)), replace=False):
+                b = self.blocks[j]
+                X[i, b] += self.sigma * self.rng.standard_normal(b.size)
+        return X
+
+    def tell(self, xs: np.ndarray, fs) -> None:
+        fs = np.asarray(fs, float)
+        i = int(np.argmin(fs))
+        rate = float(np.mean(fs < self.f))
+        if fs[i] < self.f:
+            self.mean = np.asarray(xs)[i].copy()
+            self.f = float(fs[i])
+        self.gen += 1
+        self.sigma = float(np.clip(self.sigma * np.exp(0.1 * (rate - 0.2) / 0.2), self.sigma0 / 8, self.sigma0 * 4))
+
+
 class ElitistES:
     """A (1+lambda) evolution strategy: every generation samples lam points around the best point
     so far (the incumbent) and moves there only if one is better, so a lucky find is never lost
